@@ -1,0 +1,54 @@
+package com.example.ui.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+private val AvatarGradients = listOf(
+  listOf(Color(0xFF8E8E93), Color(0xFF636366)),
+  listOf(Color(0xFF007AFF), Color(0xFF0051A8)),
+  listOf(Color(0xFF34C759), Color(0xFF248A3D)),
+  listOf(Color(0xFFFF9500), Color(0xFFC97500)),
+  listOf(Color(0xFFAF52DE), Color(0xFF7B33A0)),
+  listOf(Color(0xFF5856D6), Color(0xFF3C3A9E)),
+  listOf(Color(0xFFFF2D55), Color(0xFFC0183A)),
+  listOf(Color(0xFF5AC8FA), Color(0xFF3291B8)),
+)
+
+@Composable
+fun ContactAvatar(
+  initial: Char,
+  colorIndex: Int = 0,
+  size: Dp = 44.dp,
+  modifier: Modifier = Modifier,
+) {
+  val gradientColors = AvatarGradients[colorIndex.coerceIn(0, AvatarGradients.lastIndex)]
+  val fontSize = (size.value * 0.44f).sp
+
+  Box(
+    modifier = modifier
+      .size(size)
+      .clip(CircleShape)
+      .background(Brush.verticalGradient(gradientColors)),
+    contentAlignment = Alignment.Center,
+  ) {
+    Text(
+      text = initial.toString(),
+      color = Color.White,
+      fontSize = fontSize,
+      fontWeight = FontWeight.SemiBold,
+    )
+  }
+}
