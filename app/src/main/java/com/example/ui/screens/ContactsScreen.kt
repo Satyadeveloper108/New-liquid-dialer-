@@ -65,6 +65,7 @@ import com.example.ui.components.AddContactDialog
 import com.example.ui.components.ContactAvatar
 import com.example.ui.theme.IosBlue
 import com.example.ui.theme.LocalIosColors
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 @Composable
@@ -85,6 +86,7 @@ fun ContactsScreen(
   val colors = LocalIosColors.current
   val listState = rememberLazyListState()
   val scope = rememberCoroutineScope()
+  var scrubJob by remember { mutableStateOf<Job?>(null) }
   var showAddDialog by remember { mutableStateOf(false) }
 
   val permissionLauncher = rememberLauncherForActivityResult(
@@ -364,7 +366,8 @@ fun ContactsScreen(
           onLetterClick = { letter ->
             val targetIndex = letterToScrollIndex[letter]
             if (targetIndex != null) {
-              scope.launch { listState.scrollToItem(targetIndex) }
+              scrubJob?.cancel()
+              scrubJob = scope.launch { listState.scrollToItem(targetIndex) }
             }
           },
           modifier = Modifier
