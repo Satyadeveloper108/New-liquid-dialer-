@@ -70,13 +70,21 @@ import com.example.ui.theme.LocalIosColors
 fun RecentsScreen(
   recents: List<CallRecord>,
   selectedFilter: RecentsFilter,
+  hasCallLogPermission: Boolean = true,
   onFilterSelected: (RecentsFilter) -> Unit,
   onCallRecordClick: (CallRecord) -> Unit,
   onDeleteRecord: (String) -> Unit,
+  onPermissionResult: (Boolean) -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   val colors = LocalIosColors.current
   var isEditMode by remember { mutableStateOf(false) }
+
+  val callLogPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+    contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+  ) { isGranted ->
+    onPermissionResult(isGranted)
+  }
 
   Column(
     modifier = modifier
@@ -151,6 +159,44 @@ fun RecentsScreen(
       color = colors.textPrimary,
       modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
     )
+
+    // Call Log Permission Banner
+    if (!hasCallLogPermission) {
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 6.dp)
+          .clip(RoundedCornerShape(14.dp))
+          .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFEBF3FF))
+          .border(0.5.dp, IosBlue.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+          .padding(12.dp),
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+              text = "Sync Device Call History",
+              fontWeight = FontWeight.Bold,
+              fontSize = 14.sp,
+              color = colors.textPrimary,
+            )
+            Text(
+              text = "View calls made and received on this phone.",
+              fontSize = 12.sp,
+              color = colors.textSecondary,
+            )
+          }
+          androidx.compose.material3.TextButton(
+            onClick = { callLogPermissionLauncher.launch(android.Manifest.permission.READ_CALL_LOG) },
+          ) {
+            Text("Allow", color = IosBlue, fontWeight = FontWeight.Bold)
+          }
+        }
+      }
+    }
 
     if (recents.isEmpty()) {
       Box(

@@ -1,5 +1,9 @@
 package com.example.ui.screens
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,7 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,17 +27,29 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContactPhone
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,31 +61,37 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.model.Contact
+import com.example.ui.components.AddContactDialog
 import com.example.ui.components.ContactAvatar
 import com.example.ui.theme.IosBlue
 import com.example.ui.theme.LocalIosColors
 import kotlinx.coroutines.launch
 
-/**
- * Contacts Screen matching original iOS reference:
- * - Top bar with circular back button, centered title, and circular add button
- * - Rounded search capsule with black search and mic icons
- * - "My Card" profile header
- * - Large readable avatars with bold contact names
- * - Blue alphabetical index on right
- */
 @Composable
 fun ContactsScreen(
   contacts: List<Contact>,
   searchQuery: String,
+  hasContactsPermission: Boolean,
+  isRealDeviceContacts: Boolean,
+  isLoadingContacts: Boolean,
   onSearchQueryChange: (String) -> Unit,
   onContactClick: (Contact) -> Unit,
-  onAddContactClick: () -> Unit,
+  onSaveNewContact: (name: String, phone: String, type: String) -> Unit,
+  onSeedDemoContacts: () -> Unit,
+  onPermissionResult: (Boolean) -> Unit,
+  onToggleFavorite: (String) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   val colors = LocalIosColors.current
   val listState = rememberLazyListState()
   val scope = rememberCoroutineScope()
+  var showAddDialog by remember { mutableStateOf(false) }
+
+  val permissionLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.RequestPermission(),
+  ) { isGranted ->
+    onPermissionResult(isGranted)
+  }
 
   val groupedContacts = contacts.groupBy { it.initial }
   val alphabet = ('A'..'Z').toList()
@@ -110,12 +131,21 @@ fun ContactsScreen(
         )
       }
 
-      Text(
-        text = stringResource(id = R.string.tab_contacts),
-        fontSize = 18.sp,
-        fontWeight = FontWeight.Bold,
-        color = colors.textPrimary,
-      )
+      Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+          text = stringResource(id = R.string.tab_contacts),
+          fontSize = 18.sp,
+          fontWeight = FontWeight.Bold,
+          color = colors.textPrimary,
+        )
+        if (hasContactsPermission) {
+          Text(
+            text = "${contacts.size} contacts",
+            fontSize = 11.sp,
+            color = colors.textSecondary,
+          )
+        }
+      }
 
       Box(
         modifier = Modifier
@@ -127,7 +157,7 @@ fun ContactsScreen(
             color = if (colors.isDark) Color(0x26FFFFFF) else Color(0x1F000000),
             shape = CircleShape,
           )
-          .clickable { onAddContactClick() }
+          .clickable { showAddDialog = true }
           .testTag("add_contact_button"),
         contentAlignment = Alignment.Center,
       ) {
@@ -205,7 +235,61 @@ fun ContactsScreen(
       )
     }
 
-    // 3. Main Contact List + Alphabet Scrubber
+    // 3. Permission Banner if Contacts Permission is NOT yet granted
+    if (!hasContactsPermission) {
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 8.dp)
+          .clip(RoundedCornerShape(16.dp))
+          .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFEBF3FF))
+          .border(0.5.dp, IosBlue.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
+          .padding(14.dp),
+      ) {
+        Column {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+              imageVector = Icons.Filled.ContactPhone,
+              contentDescription = null,
+              tint = IosBlue,
+              modifier = Modifier.size(24.dp),
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+              text = "Device Contacts Sync",
+              fontWeight = FontWeight.Bold,
+              fontSize = 16.sp,
+              color = colors.textPrimary,
+            )
+          }
+
+          Spacer(modifier = Modifier.height(6.dp))
+          Text(
+            text = "Grant contacts permission to read and search real contacts saved on this phone.",
+            fontSize = 13.sp,
+            color = colors.textSecondary,
+            lineHeight = 18.sp,
+          )
+
+          Spacer(modifier = Modifier.height(10.dp))
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ElevatedButton(
+              onClick = { permissionLauncher.launch(Manifest.permission.READ_CONTACTS) },
+              colors = ButtonDefaults.elevatedButtonColors(
+                containerColor = IosBlue,
+                contentColor = Color.White,
+              ),
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.testTag("allow_contacts_permission_btn"),
+            ) {
+              Text("Allow Contacts Access", fontWeight = FontWeight.Bold)
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Main Contact List + Alphabet Scrubber
     Box(modifier = Modifier.fillMaxSize()) {
       LazyColumn(
         state = listState,
@@ -223,22 +307,22 @@ fun ContactsScreen(
               verticalAlignment = Alignment.CenterVertically,
             ) {
               ContactAvatar(
-                initial = 'G',
+                initial = 'M',
                 colorIndex = 1,
                 size = 52.dp,
               )
               Spacer(modifier = Modifier.width(14.dp))
               Column {
                 Text(
-                  text = "Gyanaranjan Jena",
+                  text = "My Card",
                   fontSize = 19.sp,
                   fontWeight = FontWeight.Bold,
                   color = colors.textPrimary,
                 )
                 Text(
-                  text = stringResource(id = R.string.my_card),
+                  text = if (hasContactsPermission) "Real Device Contacts Connected" else "Preview Mode",
                   fontSize = 13.sp,
-                  color = colors.textSecondary,
+                  color = if (hasContactsPermission) Color(0xFF34C759) else colors.textSecondary,
                 )
               }
             }
@@ -247,6 +331,55 @@ fun ContactsScreen(
               thickness = 0.5.dp,
               color = colors.separator,
             )
+          }
+        }
+
+        // Empty State: Device contacts enabled but 0 contacts on device
+        if (hasContactsPermission && contacts.isEmpty() && !isLoadingContacts) {
+          item(key = "empty_device_contacts") {
+            Box(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+              contentAlignment = Alignment.Center,
+            ) {
+              Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                  imageVector = Icons.Filled.ContactPhone,
+                  contentDescription = null,
+                  tint = colors.textSecondary,
+                  modifier = Modifier.size(56.dp),
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                  text = "No Contacts Found On Device",
+                  fontWeight = FontWeight.Bold,
+                  fontSize = 17.sp,
+                  color = colors.textPrimary,
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                  text = "Add contacts or populate demo contacts to test real device calling and dialing.",
+                  fontSize = 14.sp,
+                  color = colors.textSecondary,
+                  textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                  ElevatedButton(
+                    onClick = { showAddDialog = true },
+                    colors = ButtonDefaults.elevatedButtonColors(containerColor = IosBlue, contentColor = Color.White),
+                  ) {
+                    Text("+ Add Contact")
+                  }
+                  OutlinedButton(
+                    onClick = { onSeedDemoContacts() },
+                  ) {
+                    Text("Populate Demo Contacts")
+                  }
+                }
+              }
+            }
           }
         }
 
@@ -272,7 +405,7 @@ fun ContactsScreen(
               modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onContactClick(contact) }
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
                 .testTag("contact_item_${contact.id}"),
               verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -280,14 +413,42 @@ fun ContactsScreen(
                 initial = contact.initial,
                 colorIndex = contact.avatarColorIndex,
                 size = 46.dp,
+                photoUri = contact.photoUri,
               )
               Spacer(modifier = Modifier.width(14.dp))
-              Text(
-                text = contact.name,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold,
-                color = colors.textPrimary,
-              )
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = contact.name,
+                  fontSize = 17.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = colors.textPrimary,
+                )
+                Text(
+                  text = "${contact.type} • ${contact.phoneNumber}",
+                  fontSize = 13.sp,
+                  color = colors.textSecondary,
+                )
+              }
+
+              // Favorite Star Toggle
+              IconButton(onClick = { onToggleFavorite(contact.id) }) {
+                Icon(
+                  imageVector = if (contact.isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                  contentDescription = "Favorite",
+                  tint = if (contact.isFavorite) Color(0xFFFFCC00) else colors.textSecondary,
+                  modifier = Modifier.size(20.dp),
+                )
+              }
+
+              // Call Quick Button
+              IconButton(onClick = { onContactClick(contact) }) {
+                Icon(
+                  imageVector = Icons.Filled.Call,
+                  contentDescription = "Call",
+                  tint = Color(0xFF34C759),
+                  modifier = Modifier.size(20.dp),
+                )
+              }
             }
             HorizontalDivider(
               modifier = Modifier.padding(start = 76.dp),
@@ -302,38 +463,51 @@ fun ContactsScreen(
         }
       }
 
-      // 4. Alphabet Scrubber Bar on Right Edge
-      Column(
-        modifier = Modifier
-          .align(Alignment.CenterEnd)
-          .padding(end = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-      ) {
-        alphabet.forEach { letter ->
+      // 5. Alphabet Scrubber Bar on Right Edge
+      if (contacts.isNotEmpty()) {
+        Column(
+          modifier = Modifier
+            .align(Alignment.CenterEnd)
+            .padding(end = 4.dp),
+          horizontalAlignment = Alignment.CenterHorizontally,
+          verticalArrangement = Arrangement.Center,
+        ) {
+          alphabet.forEach { letter ->
+            Text(
+              text = letter.toString(),
+              fontSize = 10.sp,
+              fontWeight = FontWeight.SemiBold,
+              color = IosBlue,
+              modifier = Modifier
+                .clickable {
+                  val index = contacts.indexOfFirst { it.initial == letter }
+                  if (index >= 0) {
+                    scope.launch { listState.animateScrollToItem(index) }
+                  }
+                }
+                .padding(vertical = 0.5.dp, horizontal = 2.dp),
+            )
+          }
           Text(
-            text = letter.toString(),
+            text = "#",
             fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold,
             color = IosBlue,
-            modifier = Modifier
-              .clickable {
-                val index = contacts.indexOfFirst { it.initial == letter }
-                if (index >= 0) {
-                  scope.launch { listState.animateScrollToItem(index) }
-                }
-              }
-              .padding(vertical = 0.5.dp, horizontal = 2.dp),
+            modifier = Modifier.padding(vertical = 0.5.dp, horizontal = 2.dp),
           )
         }
-        Text(
-          text = "#",
-          fontSize = 10.sp,
-          fontWeight = FontWeight.SemiBold,
-          color = IosBlue,
-          modifier = Modifier.padding(vertical = 0.5.dp, horizontal = 2.dp),
-        )
       }
     }
+  }
+
+  // 6. Add Contact Modal Dialog
+  if (showAddDialog) {
+    AddContactDialog(
+      onDismiss = { showAddDialog = false },
+      onSaveContact = { name, phone, type ->
+        onSaveNewContact(name, phone, type)
+        showAddDialog = false
+      },
+    )
   }
 }

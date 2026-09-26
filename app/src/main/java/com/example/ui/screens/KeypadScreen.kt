@@ -67,6 +67,7 @@ fun KeypadScreen(
   onSetDialedNumber: (String) -> Unit,
   onStartCall: (String) -> Unit,
   onSimulateIncomingCall: () -> Unit,
+  onAddNumberToContact: ((String) -> Unit)? = null,
   modifier: Modifier = Modifier,
 ) {
   val colors = LocalIosColors.current
@@ -161,7 +162,7 @@ fun KeypadScreen(
           modifier = Modifier
             .padding(top = 4.dp)
             .clickable {
-              // Future Phase: Add Contact
+              onAddNumberToContact?.invoke(dialedDigits)
             }
             .testTag("add_number_action"),
         )

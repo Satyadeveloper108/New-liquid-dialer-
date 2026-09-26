@@ -136,6 +136,7 @@ fun FavouritesScreen(
               initial = contact.initial,
               colorIndex = contact.avatarColorIndex,
               size = 48.dp,
+              photoUri = contact.photoUri,
             )
 
             Spacer(modifier = Modifier.width(16.dp))

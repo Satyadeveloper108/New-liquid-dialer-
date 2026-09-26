@@ -1,7 +1,13 @@
 package com.example.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.ContactsRepository
 import com.example.data.SampleDataProvider
 import com.example.model.CallRecord
 import com.example.model.CallSession
@@ -23,7 +29,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class DialerViewModel : ViewModel() {
+class DialerViewModel(application: Application) : AndroidViewModel(application) {
+
+  private val repository = ContactsRepository()
 
   private val _activeTab = MutableStateFlow(NavTab.KEYPAD)
   val activeTab: StateFlow<NavTab> = _activeTab.asStateFlow()
@@ -41,7 +49,20 @@ class DialerViewModel : ViewModel() {
   private val _contactsSearchQuery = MutableStateFlow("")
   val contactsSearchQuery: StateFlow<String> = _contactsSearchQuery.asStateFlow()
 
-  private val _contacts = MutableStateFlow(SampleDataProvider.sampleContacts)
+  // Real Contacts State
+  private val _hasContactsPermission = MutableStateFlow(repository.hasContactsPermission(application))
+  val hasContactsPermission: StateFlow<Boolean> = _hasContactsPermission.asStateFlow()
+
+  private val _hasCallLogPermission = MutableStateFlow(repository.hasCallLogPermission(application))
+  val hasCallLogPermission: StateFlow<Boolean> = _hasCallLogPermission.asStateFlow()
+
+  private val _isLoadingContacts = MutableStateFlow(false)
+  val isLoadingContacts: StateFlow<Boolean> = _isLoadingContacts.asStateFlow()
+
+  private val _isRealDeviceContacts = MutableStateFlow(false)
+  val isRealDeviceContacts: StateFlow<Boolean> = _isRealDeviceContacts.asStateFlow()
+
+  private val _contacts = MutableStateFlow<List<Contact>>(SampleDataProvider.sampleContacts)
   val contacts: StateFlow<List<Contact>> = _contacts.asStateFlow()
 
   val filteredContacts: StateFlow<List<Contact>> = combine(_contacts, _contactsSearchQuery) { list, query ->
@@ -80,8 +101,109 @@ class DialerViewModel : ViewModel() {
   val isCallMinimized: StateFlow<Boolean> = _isCallMinimized.asStateFlow()
 
   private var callTimerJob: Job? = null
-
   private val dtmfPlayer = com.example.audio.DtmfPlayer()
+
+  init {
+    loadDeviceDataIfPermitted()
+  }
+
+  fun loadDeviceDataIfPermitted() {
+    val context = getApplication<Application>()
+    val hasContacts = repository.hasContactsPermission(context)
+    _hasContactsPermission.value = hasContacts
+    if (hasContacts) {
+      loadRealContacts()
+    }
+
+    val hasCallLog = repository.hasCallLogPermission(context)
+    _hasCallLogPermission.value = hasCallLog
+    if (hasCallLog) {
+      loadRealCallLogs()
+    }
+  }
+
+  fun onContactsPermissionResult(isGranted: Boolean) {
+    _hasContactsPermission.value = isGranted
+    if (isGranted) {
+      loadRealContacts()
+    }
+  }
+
+  fun onCallLogPermissionResult(isGranted: Boolean) {
+    _hasCallLogPermission.value = isGranted
+    if (isGranted) {
+      loadRealCallLogs()
+    }
+  }
+
+  fun loadRealContacts() {
+    val context = getApplication<Application>()
+    viewModelScope.launch {
+      _isLoadingContacts.value = true
+      try {
+        val deviceList = repository.getDeviceContacts(context)
+        if (deviceList.isNotEmpty()) {
+          _contacts.value = deviceList
+          _isRealDeviceContacts.value = true
+        } else {
+          _isRealDeviceContacts.value = true
+          _contacts.value = emptyList()
+        }
+      } catch (e: Exception) {
+        e.printStackTrace()
+      } finally {
+        _isLoadingContacts.value = false
+      }
+    }
+  }
+
+  fun loadRealCallLogs() {
+    val context = getApplication<Application>()
+    viewModelScope.launch {
+      try {
+        val logs = repository.getDeviceCallLogs(context)
+        if (logs.isNotEmpty()) {
+          _recents.value = logs
+        }
+      } catch (e: Exception) {
+        e.printStackTrace()
+      }
+    }
+  }
+
+  fun saveNewContact(name: String, phoneNumber: String, type: String = "mobile") {
+    val context = getApplication<Application>()
+    viewModelScope.launch {
+      val success = repository.addDeviceContact(context, name, phoneNumber, type)
+      if (success) {
+        Toast.makeText(context, "Contact \"$name\" saved to device!", Toast.LENGTH_SHORT).show()
+        loadRealContacts()
+      } else {
+        // Add to local state if writing to contacts provider fails or is forbidden
+        val newContact = Contact(
+          id = System.currentTimeMillis().toString(),
+          name = name,
+          phoneNumber = phoneNumber,
+          type = type,
+          avatarColorIndex = Math.abs(name.hashCode()) % 8,
+          isFavorite = false,
+          isSystemContact = false,
+        )
+        _contacts.update { listOf(newContact) + it }
+        Toast.makeText(context, "Contact \"$name\" added!", Toast.LENGTH_SHORT).show()
+      }
+    }
+  }
+
+  fun seedSampleContactsToDevice() {
+    val context = getApplication<Application>()
+    viewModelScope.launch {
+      _isLoadingContacts.value = true
+      val count = repository.seedDemoContactsToDevice(context)
+      Toast.makeText(context, "Populated $count real contacts to device!", Toast.LENGTH_SHORT).show()
+      loadRealContacts()
+    }
+  }
 
   fun selectTab(tab: NavTab) {
     _activeTab.value = tab
@@ -126,9 +248,18 @@ class DialerViewModel : ViewModel() {
   }
 
   fun toggleFavorite(contactId: String) {
-    _contacts.update { list ->
-      list.map { contact ->
-        if (contact.id == contactId) contact.copy(isFavorite = !contact.isFavorite) else contact
+    val context = getApplication<Application>()
+    val currentContact = _contacts.value.firstOrNull { it.id == contactId } ?: return
+    val newFav = !currentContact.isFavorite
+
+    viewModelScope.launch {
+      if (currentContact.isSystemContact) {
+        repository.toggleFavoriteInDevice(context, contactId, newFav)
+      }
+      _contacts.update { list ->
+        list.map { contact ->
+          if (contact.id == contactId) contact.copy(isFavorite = newFav) else contact
+        }
       }
     }
   }
@@ -147,7 +278,22 @@ class DialerViewModel : ViewModel() {
     }
   }
 
-  // Call Actions
+  // Real device phone call launch
+  fun placeRealDeviceCall(context: Context, number: String) {
+    if (number.isBlank()) return
+    try {
+      val intent = Intent(Intent.ACTION_DIAL).apply {
+        data = Uri.parse("tel:${Uri.encode(number)}")
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+      }
+      context.startActivity(intent)
+    } catch (e: Exception) {
+      e.printStackTrace()
+      startCall(number = number)
+    }
+  }
+
+  // In-app Call Actions
   fun startCall(name: String? = null, number: String) {
     if (number.isBlank()) return
     val contactName = name ?: findContactName(number) ?: number

@@ -12,10 +12,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.model.CallState
 import com.example.model.NavTab
+import com.example.ui.components.AddContactDialog
 import com.example.ui.components.IosBottomNav
 import com.example.ui.components.MiniCallBanner
 import com.example.ui.screens.ActiveCallScreen
@@ -46,6 +50,13 @@ fun DialerApp(
   val unreadVoicemails by viewModel.unreadVoicemailCount.collectAsStateWithLifecycle()
   val callSession by viewModel.callSession.collectAsStateWithLifecycle()
   val isCallMinimized by viewModel.isCallMinimized.collectAsStateWithLifecycle()
+
+  val hasContactsPermission by viewModel.hasContactsPermission.collectAsStateWithLifecycle()
+  val hasCallLogPermission by viewModel.hasCallLogPermission.collectAsStateWithLifecycle()
+  val isRealDeviceContacts by viewModel.isRealDeviceContacts.collectAsStateWithLifecycle()
+  val isLoadingContacts by viewModel.isLoadingContacts.collectAsStateWithLifecycle()
+
+  var prefilledAddContactNumber by remember { mutableStateOf<String?>(null) }
 
   // BackHandler to handle custom state navigation or backstack
   BackHandler(enabled = activeTab != NavTab.KEYPAD) {
@@ -98,12 +109,16 @@ fun DialerApp(
               RecentsScreen(
                 recents = recents,
                 selectedFilter = recentsFilter,
+                hasCallLogPermission = hasCallLogPermission,
                 onFilterSelected = { viewModel.setRecentsFilter(it) },
                 onCallRecordClick = { record ->
                   viewModel.startCall(record.contactName, record.phoneNumber)
                 },
                 onDeleteRecord = { id ->
                   viewModel.removeRecent(id)
+                },
+                onPermissionResult = { isGranted ->
+                  viewModel.onCallLogPermissionResult(isGranted)
                 },
               )
             }
@@ -112,11 +127,25 @@ fun DialerApp(
               ContactsScreen(
                 contacts = contacts,
                 searchQuery = contactsSearchQuery,
+                hasContactsPermission = hasContactsPermission,
+                isRealDeviceContacts = isRealDeviceContacts,
+                isLoadingContacts = isLoadingContacts,
                 onSearchQueryChange = { viewModel.setContactsSearchQuery(it) },
                 onContactClick = { contact ->
                   viewModel.startCall(contact.name, contact.phoneNumber)
                 },
-                onAddContactClick = { },
+                onSaveNewContact = { name, phone, type ->
+                  viewModel.saveNewContact(name, phone, type)
+                },
+                onSeedDemoContacts = {
+                  viewModel.seedSampleContactsToDevice()
+                },
+                onPermissionResult = { isGranted ->
+                  viewModel.onContactsPermissionResult(isGranted)
+                },
+                onToggleFavorite = { contactId ->
+                  viewModel.toggleFavorite(contactId)
+                },
               )
             }
 
@@ -133,6 +162,9 @@ fun DialerApp(
                 onSetDialedNumber = { viewModel.setDialedNumber(it) },
                 onStartCall = { number -> viewModel.startCall(number = number) },
                 onSimulateIncomingCall = { viewModel.simulateIncomingCall() },
+                onAddNumberToContact = { number ->
+                  prefilledAddContactNumber = number
+                },
               )
             }
 
@@ -175,6 +207,17 @@ fun DialerApp(
         onToggleSpeaker = { viewModel.toggleSpeaker() },
         onToggleKeypad = { viewModel.toggleKeypad() },
         onMinimize = { viewModel.minimizeCall() },
+      )
+    }
+
+    // Add Contact Dialog from Keypad "Add Number"
+    prefilledAddContactNumber?.let { number ->
+      AddContactDialog(
+        onDismiss = { prefilledAddContactNumber = null },
+        onSaveContact = { name, phone, type ->
+          viewModel.saveNewContact(name, phone, type)
+          prefilledAddContactNumber = null
+        },
       )
     }
   }

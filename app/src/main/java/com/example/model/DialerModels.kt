@@ -32,9 +32,11 @@ data class Contact(
   val type: String = "mobile",
   val avatarColorIndex: Int = 0,
   val isFavorite: Boolean = false,
+  val photoUri: String? = null,
+  val isSystemContact: Boolean = false,
 ) {
   val initial: Char
-    get() = name.firstOrNull()?.uppercaseChar() ?: '?'
+    get() = name.firstOrNull { it.isLetterOrDigit() }?.uppercaseChar() ?: '?'
 }
 
 data class CallRecord(

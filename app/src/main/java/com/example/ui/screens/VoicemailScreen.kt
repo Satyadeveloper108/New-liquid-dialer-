@@ -139,13 +139,27 @@ fun VoicemailScreen(
       modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
     )
 
-    LazyColumn(
-      modifier = Modifier.fillMaxSize(),
-    ) {
-      val activeVoicemails = voicemails.filter { !it.isDeleted }
-      val deletedCount = voicemails.count { it.isDeleted }.coerceAtLeast(1)
+    val activeVoicemails = voicemails.filter { !it.isDeleted }
+    val deletedCount = voicemails.count { it.isDeleted }
 
-      items(activeVoicemails, key = { it.id }) { item ->
+    if (activeVoicemails.isEmpty() && deletedCount == 0) {
+      Box(
+        modifier = Modifier
+          .fillMaxSize()
+          .padding(32.dp),
+        contentAlignment = Alignment.Center,
+      ) {
+        Text(
+          text = "No Voicemail",
+          fontSize = 18.sp,
+          color = colors.textSecondary,
+        )
+      }
+    } else {
+      LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+      ) {
+        items(activeVoicemails, key = { it.id }) { item ->
         val isExpanded = selectedVoicemailId == item.id
 
         Column(
@@ -343,6 +357,7 @@ fun VoicemailScreen(
       item {
         Spacer(modifier = Modifier.height(72.dp))
       }
+    }
     }
   }
 }

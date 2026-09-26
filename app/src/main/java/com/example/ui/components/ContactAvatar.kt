@@ -11,10 +11,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 
 private val AvatarGradients = listOf(
   listOf(Color(0xFF8E8E93), Color(0xFF636366)),
@@ -32,23 +34,35 @@ fun ContactAvatar(
   initial: Char,
   colorIndex: Int = 0,
   size: Dp = 44.dp,
+  photoUri: String? = null,
   modifier: Modifier = Modifier,
 ) {
-  val gradientColors = AvatarGradients[colorIndex.coerceIn(0, AvatarGradients.lastIndex)]
-  val fontSize = (size.value * 0.44f).sp
-
-  Box(
-    modifier = modifier
-      .size(size)
-      .clip(CircleShape)
-      .background(Brush.verticalGradient(gradientColors)),
-    contentAlignment = Alignment.Center,
-  ) {
-    Text(
-      text = initial.toString(),
-      color = Color.White,
-      fontSize = fontSize,
-      fontWeight = FontWeight.SemiBold,
+  if (!photoUri.isNullOrBlank()) {
+    AsyncImage(
+      model = photoUri,
+      contentDescription = null,
+      contentScale = ContentScale.Crop,
+      modifier = modifier
+        .size(size)
+        .clip(CircleShape),
     )
+  } else {
+    val gradientColors = AvatarGradients[colorIndex.coerceIn(0, AvatarGradients.lastIndex)]
+    val fontSize = (size.value * 0.44f).sp
+
+    Box(
+      modifier = modifier
+        .size(size)
+        .clip(CircleShape)
+        .background(Brush.verticalGradient(gradientColors)),
+      contentAlignment = Alignment.Center,
+    ) {
+      Text(
+        text = initial.toString(),
+        color = Color.White,
+        fontSize = fontSize,
+        fontWeight = FontWeight.SemiBold,
+      )
+    }
   }
 }
