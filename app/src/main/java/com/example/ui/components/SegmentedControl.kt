@@ -3,11 +3,11 @@ package com.example.ui.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,12 +34,15 @@ fun SegmentedControl(
 ) {
   val colors = LocalIosColors.current
   val items = listOf(RecentsFilter.ALL to "All", RecentsFilter.MISSED to "Missed")
+  val pillShape = RoundedCornerShape(16.dp)
 
   Box(
     modifier = modifier
-      .height(32.dp)
-      .clip(RoundedCornerShape(8.dp))
-      .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
+      .height(34.dp)
+      .shadow(elevation = 1.dp, shape = pillShape, spotColor = Color(0x14000000))
+      .clip(pillShape)
+      .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFEEEEF0))
+      .border(0.5.dp, if (colors.isDark) Color(0x2EFFFFFF) else Color(0x14000000), pillShape)
       .padding(2.dp),
   ) {
     Row(
@@ -50,7 +53,7 @@ fun SegmentedControl(
         val isSelected = selectedFilter == filter
         val textColor by animateColorAsState(
           targetValue = if (isSelected) colors.textPrimary else colors.textSecondary,
-          animationSpec = tween(durationMillis = 200),
+          animationSpec = tween(durationMillis = 180),
           label = "segmentedTextColor",
         )
 
@@ -58,10 +61,10 @@ fun SegmentedControl(
           Modifier
             .weight(1f)
             .fillMaxHeight()
-            .shadow(1.dp, RoundedCornerShape(7.dp))
+            .shadow(1.5.dp, RoundedCornerShape(14.dp), spotColor = Color(0x1F000000))
             .background(
               if (colors.isDark) Color(0xFF636366) else Color.White,
-              RoundedCornerShape(7.dp),
+              RoundedCornerShape(14.dp),
             )
         } else {
           Modifier
@@ -71,7 +74,7 @@ fun SegmentedControl(
 
         Box(
           modifier = itemModifier
-            .clip(RoundedCornerShape(7.dp))
+            .clip(RoundedCornerShape(14.dp))
             .clickable { onFilterSelected(filter) }
             .testTag("segment_${label.lowercase()}"),
           contentAlignment = Alignment.Center,
@@ -79,8 +82,8 @@ fun SegmentedControl(
           Text(
             text = label,
             color = textColor,
-            fontSize = 13.sp,
-            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+            fontSize = 13.5.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
           )
         }
       }

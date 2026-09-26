@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,8 +21,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,17 +33,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.model.Contact
 import com.example.ui.components.ContactAvatar
-import com.example.ui.components.ScreenHeader
 import com.example.ui.theme.CallAcceptGreen
-import com.example.ui.theme.IosBlue
 import com.example.ui.theme.LocalIosColors
 
+/**
+ * Favourites Screen matching original iOS reference:
+ * - Centered "Favourites" title
+ * - Top-right circular "+" button in a thin-bordered pill
+ * - Clean white background
+ * - Centered bold "No Favourites" text in empty state
+ */
 @Composable
 fun FavouritesScreen(
   favourites: List<Contact>,
@@ -61,65 +64,60 @@ fun FavouritesScreen(
       .background(colors.background)
       .statusBarsPadding(),
   ) {
-    // Header with title and Add button
-    ScreenHeader(
-      title = stringResource(id = R.string.tab_favourites),
-      trailingAction = {
-        IconButton(
-          onClick = onAddFavouriteClick,
-          modifier = Modifier.testTag("add_favourite_button"),
-        ) {
-          Icon(
-            imageVector = Icons.Filled.Add,
-            contentDescription = "Add Favourite",
-            tint = IosBlue,
-            modifier = Modifier.size(28.dp),
+    // Top Bar matching iOS: Centered Title + Top-Right Circular Add Button
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp, vertical = 8.dp),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Spacer(modifier = Modifier.size(36.dp))
+
+      Text(
+        text = stringResource(id = R.string.tab_favourites),
+        fontSize = 18.sp,
+        fontWeight = FontWeight.Bold,
+        color = colors.textPrimary,
+      )
+
+      Box(
+        modifier = Modifier
+          .size(36.dp)
+          .clip(CircleShape)
+          .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFFFFFFF))
+          .border(
+            width = 0.5.dp,
+            color = if (colors.isDark) Color(0x26FFFFFF) else Color(0x1F000000),
+            shape = CircleShape,
           )
-        }
-      },
-    )
+          .clickable { onAddFavouriteClick() }
+          .testTag("add_favourite_button"),
+        contentAlignment = Alignment.Center,
+      ) {
+        Icon(
+          imageVector = Icons.Filled.Add,
+          contentDescription = "Add Favourite",
+          tint = colors.textPrimary,
+          modifier = Modifier.size(22.dp),
+        )
+      }
+    }
 
     if (favourites.isEmpty()) {
-      // Empty State
+      // Empty State: Vertically and horizontally centered "No Favourites"
       Box(
         modifier = Modifier
           .fillMaxSize()
-          .padding(32.dp),
+          .padding(bottom = 80.dp),
         contentAlignment = Alignment.Center,
       ) {
-        Column(
-          horizontalAlignment = Alignment.CenterHorizontally,
-          verticalArrangement = Arrangement.Center,
-        ) {
-          Box(
-            modifier = Modifier
-              .size(72.dp)
-              .clip(CircleShape)
-              .background(colors.keypadButtonBg),
-            contentAlignment = Alignment.Center,
-          ) {
-            Icon(
-              imageVector = Icons.Outlined.StarBorder,
-              contentDescription = null,
-              tint = colors.textSecondary,
-              modifier = Modifier.size(36.dp),
-            )
-          }
-          Spacer(modifier = Modifier.height(16.dp))
-          Text(
-            text = stringResource(id = R.string.no_favourites),
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = colors.textPrimary,
-          )
-          Spacer(modifier = Modifier.height(8.dp))
-          Text(
-            text = stringResource(id = R.string.no_favourites_description),
-            fontSize = 15.sp,
-            color = colors.textSecondary,
-            textAlign = TextAlign.Center,
-          )
-        }
+        Text(
+          text = stringResource(id = R.string.no_favourites),
+          fontSize = 28.sp,
+          fontWeight = FontWeight.Bold,
+          color = colors.textPrimary,
+        )
       }
     } else {
       LazyColumn(
@@ -148,7 +146,7 @@ fun FavouritesScreen(
               Text(
                 text = contact.name,
                 fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Bold,
                 color = colors.textPrimary,
               )
               Text(
@@ -164,7 +162,7 @@ fun FavouritesScreen(
               modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(colors.keypadButtonBg),
+                .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)),
             ) {
               Icon(
                 imageVector = Icons.Filled.Call,
@@ -173,22 +171,8 @@ fun FavouritesScreen(
                 modifier = Modifier.size(20.dp),
               )
             }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Star toggler
-            IconButton(
-              onClick = { onToggleFavorite(contact.id) },
-              modifier = Modifier.size(36.dp),
-            ) {
-              Icon(
-                imageVector = Icons.Filled.Star,
-                contentDescription = "Remove Favourite",
-                tint = IosBlue,
-                modifier = Modifier.size(22.dp),
-              )
-            }
           }
+
           HorizontalDivider(
             modifier = Modifier.padding(start = 84.dp),
             thickness = 0.5.dp,

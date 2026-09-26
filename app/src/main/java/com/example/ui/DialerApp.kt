@@ -124,7 +124,10 @@ fun DialerApp(
               KeypadScreen(
                 dialedDigits = dialedDigits,
                 formattedNumber = formattedNumber,
-                onDigitPress = { viewModel.appendDigit(it) },
+                onDigitPress = { char ->
+                  viewModel.playDtmfTone(char)
+                  viewModel.appendDigit(char)
+                },
                 onDeleteDigit = { viewModel.deleteDigit() },
                 onClearDigits = { viewModel.clearDigits() },
                 onSetDialedNumber = { viewModel.setDialedNumber(it) },

@@ -81,12 +81,28 @@ class DialerViewModel : ViewModel() {
 
   private var callTimerJob: Job? = null
 
+  private val dtmfPlayer = com.example.audio.DtmfPlayer()
+
   fun selectTab(tab: NavTab) {
     _activeTab.value = tab
   }
 
+  fun playDtmfTone(char: Char) {
+    dtmfPlayer.playTone(char)
+  }
+
   fun appendDigit(digit: Char) {
-    _dialedDigits.update { it + digit }
+    _dialedDigits.update { current ->
+      if (digit == '+') {
+        if (current.contains('+')) current else current + '+'
+      } else {
+        current + digit
+      }
+    }
+  }
+
+  fun appendPlus() {
+    appendDigit('+')
   }
 
   fun deleteDigit() {
@@ -248,15 +264,26 @@ class DialerViewModel : ViewModel() {
     }?.name
   }
 
-  private fun formatDialerNumber(raw: String): String {
+  fun formatDialerNumber(raw: String): String {
     if (raw.isEmpty()) return ""
-    // Format US numbers as (XXX) XXX-XXXX if 10 digits
+    if (raw.startsWith("*") || raw.startsWith("#") || raw.contains("#") || raw.contains("*")) {
+      return raw
+    }
+    if (raw.startsWith("+")) {
+      val afterPlus = raw.drop(1)
+      return when {
+        afterPlus.isEmpty() -> "+"
+        afterPlus.length <= 3 -> "+$afterPlus"
+        afterPlus.length <= 6 -> "+${afterPlus.take(3)} ${afterPlus.drop(3)}"
+        afterPlus.length <= 10 -> "+${afterPlus.take(3)} ${afterPlus.substring(3, 6)} ${afterPlus.drop(6)}"
+        else -> "+${afterPlus.take(3)} ${afterPlus.substring(3, 6)} ${afterPlus.substring(6, 10)} ${afterPlus.drop(10)}"
+      }
+    }
     val digitsOnly = raw.filter { it.isDigit() }
     return when {
-      raw.startsWith("*") || raw.startsWith("#") -> raw
-      digitsOnly.length in 4..7 -> "${digitsOnly.take(3)}-${digitsOnly.drop(3)}"
-      digitsOnly.length in 8..10 -> "(${digitsOnly.take(3)}) ${digitsOnly.substring(3, 6)}-${digitsOnly.drop(6)}"
-      digitsOnly.length == 11 && digitsOnly.startsWith("1") -> "+1 (${digitsOnly.substring(1, 4)}) ${digitsOnly.substring(4, 7)}-${digitsOnly.drop(7)}"
+      digitsOnly.length in 4..7 -> "${digitsOnly.take(3)} ${digitsOnly.drop(3)}"
+      digitsOnly.length in 8..10 -> "${digitsOnly.take(3)} ${digitsOnly.substring(3, 6)} ${digitsOnly.drop(6)}"
+      digitsOnly.length > 10 -> "${digitsOnly.take(3)} ${digitsOnly.substring(3, 6)} ${digitsOnly.substring(6, 10)} ${digitsOnly.drop(10)}"
       else -> raw
     }
   }
@@ -264,5 +291,6 @@ class DialerViewModel : ViewModel() {
   override fun onCleared() {
     super.onCleared()
     callTimerJob?.cancel()
+    dtmfPlayer.release()
   }
 }

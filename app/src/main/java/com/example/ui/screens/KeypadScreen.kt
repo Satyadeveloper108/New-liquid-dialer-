@@ -2,11 +2,15 @@ package com.example.ui.screens
 
 import android.content.ClipboardManager
 import android.content.Context
+import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,18 +25,18 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
-import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.PhoneCallback
+import androidx.compose.material.icons.automirrored.filled.PhoneCallback
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -41,10 +45,18 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.components.CallActionButton
 import com.example.ui.components.CallActionType
 import com.example.ui.components.KeypadButton
-import com.example.ui.theme.CallAcceptGreen
 import com.example.ui.theme.IosBlue
 import com.example.ui.theme.LocalIosColors
 
+/**
+ * Keypad Screen closely following the original iOS reference:
+ * - Pure white background
+ * - Near-white circular buttons with subtle hairline rim and soft shadow
+ * - Bold numbers and tight uppercase letters
+ * - Green circular call button
+ * - Animated backspace with single tap delete and long press clear
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun KeypadScreen(
   dialedDigits: String,
@@ -69,7 +81,7 @@ fun KeypadScreen(
     horizontalAlignment = Alignment.CenterHorizontally,
     verticalArrangement = Arrangement.SpaceBetween,
   ) {
-    // Top Bar with Simulator Trigger Button
+    // Top Simulator Button (Discreet)
     Row(
       modifier = Modifier
         .fillMaxWidth()
@@ -77,12 +89,17 @@ fun KeypadScreen(
       horizontalArrangement = Arrangement.End,
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      Surface(
+      Box(
         modifier = Modifier
           .clip(CircleShape)
+          .background(if (colors.isDark) Color(0x33FFFFFF) else Color(0xFFF2F2F7))
+          .border(
+            width = 0.5.dp,
+            color = if (colors.isDark) Color(0x26FFFFFF) else Color(0x1F000000),
+            shape = CircleShape,
+          )
           .clickable { onSimulateIncomingCall() }
           .testTag("preview_incoming_call_button"),
-        color = colors.keypadButtonBg,
       ) {
         Row(
           modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -90,7 +107,7 @@ fun KeypadScreen(
           horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
           Icon(
-            imageVector = Icons.Filled.PhoneCallback,
+            imageVector = Icons.AutoMirrored.Filled.PhoneCallback,
             contentDescription = "Simulate Incoming Call",
             tint = IosBlue,
             modifier = Modifier.size(16.dp),
@@ -115,14 +132,13 @@ fun KeypadScreen(
       Text(
         text = if (formattedNumber.isNotEmpty()) formattedNumber else " ",
         fontSize = if (formattedNumber.length > 12) 30.sp else 38.sp,
-        fontWeight = FontWeight.Light,
+        fontWeight = FontWeight.Normal,
         color = colors.textPrimary,
         textAlign = TextAlign.Center,
         maxLines = 1,
         modifier = Modifier
           .fillMaxWidth()
           .clickable {
-            // Paste clipboard if available
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
             val item = clipboard?.primaryClip?.getItemAt(0)?.text?.toString()
             if (!item.isNullOrBlank()) {
@@ -159,37 +175,37 @@ fun KeypadScreen(
     ) {
       // Row 1: 1, 2 ABC, 3 DEF
       Row(
-        horizontalArrangement = Arrangement.spacedBy(28.dp),
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
         KeypadButton(digit = "1", letters = "", onDigitClick = { onDigitPress('1') })
-        KeypadButton(digit = "2", letters = "A B C", onDigitClick = { onDigitPress('2') })
-        KeypadButton(digit = "3", letters = "D E F", onDigitClick = { onDigitPress('3') })
+        KeypadButton(digit = "2", letters = "ABC", onDigitClick = { onDigitPress('2') })
+        KeypadButton(digit = "3", letters = "DEF", onDigitClick = { onDigitPress('3') })
       }
 
       // Row 2: 4 GHI, 5 JKL, 6 MNO
       Row(
-        horizontalArrangement = Arrangement.spacedBy(28.dp),
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        KeypadButton(digit = "4", letters = "G H I", onDigitClick = { onDigitPress('4') })
-        KeypadButton(digit = "5", letters = "J K L", onDigitClick = { onDigitPress('5') })
-        KeypadButton(digit = "6", letters = "M N O", onDigitClick = { onDigitPress('6') })
+        KeypadButton(digit = "4", letters = "GHI", onDigitClick = { onDigitPress('4') })
+        KeypadButton(digit = "5", letters = "JKL", onDigitClick = { onDigitPress('5') })
+        KeypadButton(digit = "6", letters = "MNO", onDigitClick = { onDigitPress('6') })
       }
 
       // Row 3: 7 PQRS, 8 TUV, 9 WXYZ
       Row(
-        horizontalArrangement = Arrangement.spacedBy(28.dp),
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        KeypadButton(digit = "7", letters = "P Q R S", onDigitClick = { onDigitPress('7') })
-        KeypadButton(digit = "8", letters = "T U V", onDigitClick = { onDigitPress('8') })
-        KeypadButton(digit = "9", letters = "W X Y Z", onDigitClick = { onDigitPress('9') })
+        KeypadButton(digit = "7", letters = "PQRS", onDigitClick = { onDigitPress('7') })
+        KeypadButton(digit = "8", letters = "TUV", onDigitClick = { onDigitPress('8') })
+        KeypadButton(digit = "9", letters = "WXYZ", onDigitClick = { onDigitPress('9') })
       }
 
       // Row 4: *, 0 +, #
       Row(
-        horizontalArrangement = Arrangement.spacedBy(28.dp),
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
         KeypadButton(digit = "*", letters = "", onDigitClick = { onDigitPress('*') })
@@ -214,7 +230,7 @@ fun KeypadScreen(
 
         // Center: Green Call Button
         Box(
-          modifier = Modifier.padding(horizontal = 28.dp),
+          modifier = Modifier.padding(horizontal = 24.dp),
           contentAlignment = Alignment.Center,
         ) {
           CallActionButton(
@@ -239,11 +255,23 @@ fun KeypadScreen(
             enter = fadeIn(),
             exit = fadeOut(),
           ) {
-            IconButton(
-              onClick = onDeleteDigit,
+            val view = LocalView.current
+            Box(
               modifier = Modifier
                 .size(48.dp)
-                .testTag("keypad_backspace_button"),
+                .clip(CircleShape)
+                .testTag("keypad_backspace_button")
+                .combinedClickable(
+                  onClick = {
+                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    onDeleteDigit()
+                  },
+                  onLongClick = {
+                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    onClearDigits()
+                  },
+                ),
+              contentAlignment = Alignment.Center,
             ) {
               Icon(
                 imageVector = Icons.AutoMirrored.Filled.Backspace,

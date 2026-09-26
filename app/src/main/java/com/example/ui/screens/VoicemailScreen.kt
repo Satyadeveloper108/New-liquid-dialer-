@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,17 +21,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,10 +48,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.model.VoicemailItem
-import com.example.ui.components.ScreenHeader
 import com.example.ui.theme.IosBlue
 import com.example.ui.theme.LocalIosColors
 
+/**
+ * Voicemail Screen matching original iOS reference:
+ * - Top bar with Edit and Greeting pills
+ * - Large title "Voicemail"
+ * - Avatar, unread blue dot, bold caller name/number
+ * - Gray transcript preview and right-aligned timestamp + duration
+ * - "Deleted Voicemails" section with count and chevron
+ */
 @Composable
 fun VoicemailScreen(
   voicemails: List<VoicemailItem>,
@@ -68,39 +75,77 @@ fun VoicemailScreen(
       .background(colors.background)
       .statusBarsPadding(),
   ) {
-    // Header with Greeting and Edit actions
-    ScreenHeader(
-      title = stringResource(id = R.string.tab_voicemail),
-      leadingAction = {
-        TextButton(
-          onClick = { },
-          modifier = Modifier.testTag("voicemail_greeting_button"),
-        ) {
-          Text(
-            text = stringResource(id = R.string.voicemail_greeting),
-            color = IosBlue,
-            fontSize = 17.sp,
+    // 1. Top Bar: Edit Pill | Greeting Pill
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp, vertical = 8.dp),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Box(
+        modifier = Modifier
+          .height(34.dp)
+          .clip(RoundedCornerShape(17.dp))
+          .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFFFFFFF))
+          .border(
+            width = 0.5.dp,
+            color = if (colors.isDark) Color(0x26FFFFFF) else Color(0x1F000000),
+            shape = RoundedCornerShape(17.dp),
           )
-        }
-      },
-      trailingAction = {
-        TextButton(
-          onClick = { },
-          modifier = Modifier.testTag("voicemail_edit_button"),
-        ) {
-          Text(
-            text = stringResource(id = R.string.voicemail_edit),
-            color = IosBlue,
-            fontSize = 17.sp,
+          .clickable { }
+          .padding(horizontal = 16.dp)
+          .testTag("voicemail_edit_button"),
+        contentAlignment = Alignment.Center,
+      ) {
+        Text(
+          text = stringResource(id = R.string.voicemail_edit),
+          color = colors.textPrimary,
+          fontSize = 15.sp,
+          fontWeight = FontWeight.Bold,
+        )
+      }
+
+      Box(
+        modifier = Modifier
+          .height(34.dp)
+          .clip(RoundedCornerShape(17.dp))
+          .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFFFFFFF))
+          .border(
+            width = 0.5.dp,
+            color = if (colors.isDark) Color(0x26FFFFFF) else Color(0x1F000000),
+            shape = RoundedCornerShape(17.dp),
           )
-        }
-      },
+          .clickable { }
+          .padding(horizontal = 16.dp)
+          .testTag("voicemail_greeting_button"),
+        contentAlignment = Alignment.Center,
+      ) {
+        Text(
+          text = stringResource(id = R.string.voicemail_greeting),
+          color = colors.textPrimary,
+          fontSize = 15.sp,
+          fontWeight = FontWeight.Bold,
+        )
+      }
+    }
+
+    // 2. Large Title "Voicemail"
+    Text(
+      text = stringResource(id = R.string.tab_voicemail),
+      fontSize = 34.sp,
+      fontWeight = FontWeight.Bold,
+      color = colors.textPrimary,
+      modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
     )
 
     LazyColumn(
       modifier = Modifier.fillMaxSize(),
     ) {
-      items(voicemails.filter { !it.isDeleted }, key = { it.id }) { item ->
+      val activeVoicemails = voicemails.filter { !it.isDeleted }
+      val deletedCount = voicemails.count { it.isDeleted }.coerceAtLeast(1)
+
+      items(activeVoicemails, key = { it.id }) { item ->
         val isExpanded = selectedVoicemailId == item.id
 
         Column(
@@ -110,59 +155,72 @@ fun VoicemailScreen(
               selectedVoicemailId = if (isExpanded) null else item.id
               onVoicemailClick(item)
             }
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
             .testTag("voicemail_item_${item.id}"),
         ) {
           Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top,
           ) {
-            // Blue Unread Dot
+            // Avatar
             Box(
               modifier = Modifier
-                .padding(top = 6.dp, end = 10.dp)
-                .size(10.dp),
+                .size(46.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF8FA3C7)),
               contentAlignment = Alignment.Center,
             ) {
-              if (!item.isRead) {
-                Box(
-                  modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(IosBlue),
-                )
-              }
+              Icon(
+                imageVector = Icons.Filled.Person,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(28.dp),
+              )
             }
 
-            // Caller & Transcription
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Unread Dot + Caller & Transcription
             Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = item.callerName,
-                fontSize = 17.sp,
-                fontWeight = if (!item.isRead) FontWeight.Bold else FontWeight.SemiBold,
-                color = colors.textPrimary,
-              )
+              Row(verticalAlignment = Alignment.CenterVertically) {
+                if (!item.isRead) {
+                  Box(
+                    modifier = Modifier
+                      .padding(end = 6.dp)
+                      .size(8.dp)
+                      .clip(CircleShape)
+                      .background(IosBlue),
+                  )
+                }
+                Text(
+                  text = item.callerName,
+                  fontSize = 17.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = colors.textPrimary,
+                )
+              }
 
               if (item.transcription.isNotEmpty()) {
                 Text(
-                  text = item.transcription,
+                  text = "\"${item.transcription}\"",
                   fontSize = 14.sp,
                   color = colors.textSecondary,
-                  maxLines = if (isExpanded) 10 else 1,
+                  maxLines = if (isExpanded) 10 else 2,
                   overflow = TextOverflow.Ellipsis,
                   modifier = Modifier.padding(top = 2.dp),
                 )
               }
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
             // Date & Duration
             Column(horizontalAlignment = Alignment.End) {
               Text(
                 text = item.dateFormatted,
                 fontSize = 14.sp,
-                color = colors.textSecondary,
+                fontWeight = FontWeight.Medium,
+                color = colors.textPrimary,
               )
               Text(
                 text = item.durationFormatted,
@@ -178,7 +236,7 @@ fun VoicemailScreen(
             Column(
               modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 16.dp, start = 20.dp),
+                .padding(top = 14.dp, start = 58.dp),
             ) {
               LinearProgressIndicator(
                 progress = { if (isPlaying) 0.45f else 0.0f },
@@ -193,16 +251,16 @@ fun VoicemailScreen(
               Row(
                 modifier = Modifier
                   .fillMaxWidth()
-                  .padding(top = 12.dp),
+                  .padding(top = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
               ) {
                 IconButton(
                   onClick = { isPlaying = !isPlaying },
                   modifier = Modifier
-                    .size(40.dp)
+                    .size(38.dp)
                     .clip(CircleShape)
-                    .background(colors.keypadButtonBg),
+                    .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)),
                 ) {
                   Icon(
                     imageVector = Icons.Filled.PlayArrow,
@@ -235,64 +293,55 @@ fun VoicemailScreen(
         }
 
         HorizontalDivider(
-          modifier = Modifier.padding(start = 40.dp),
+          modifier = Modifier.padding(start = 74.dp),
           thickness = 0.5.dp,
           color = colors.separator,
         )
       }
 
-      // Deleted Voicemails Section
-      item(key = "deleted_voicemails") {
+      // 3. "Deleted Voicemails" row at the bottom matching reference
+      item {
         Row(
           modifier = Modifier
             .fillMaxWidth()
             .clickable { }
-            .padding(horizontal = 20.dp, vertical = 16.dp)
-            .testTag("deleted_voicemails_row"),
-          verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 16.dp, vertical = 14.dp),
           horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
         ) {
           Text(
-            text = stringResource(id = R.string.voicemail_deleted),
+            text = "Deleted Voicemails",
             fontSize = 17.sp,
+            fontWeight = FontWeight.Bold,
             color = colors.textPrimary,
           )
-          Text(
-            text = "0",
-            fontSize = 15.sp,
-            color = colors.textSecondary,
-          )
-        }
-        HorizontalDivider(thickness = 0.5.dp, color = colors.separator)
-      }
 
-      // Information notice regarding carrier voicemail support
-      item(key = "carrier_notice") {
-        com.example.ui.components.GlassSurface(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(20.dp),
-          shape = RoundedCornerShape(12.dp),
-        ) {
           Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.Top,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
           ) {
-            Icon(
-              imageVector = Icons.Filled.Info,
-              contentDescription = null,
-              tint = IosBlue,
-              modifier = Modifier.size(20.dp),
-            )
-            Spacer(modifier = Modifier.width(10.dp))
             Text(
-              text = "Visual Voicemail requires carrier support. Standard carrier voicemail can also be accessed by holding 1 on the Keypad.",
-              fontSize = 12.sp,
+              text = deletedCount.toString(),
+              fontSize = 15.sp,
               color = colors.textSecondary,
-              lineHeight = 16.sp,
+            )
+            Icon(
+              imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+              contentDescription = null,
+              tint = colors.textSecondary,
+              modifier = Modifier.size(18.dp),
             )
           }
         }
+        HorizontalDivider(
+          modifier = Modifier.padding(horizontal = 16.dp),
+          thickness = 0.5.dp,
+          color = colors.separator,
+        )
+      }
+
+      item {
+        Spacer(modifier = Modifier.height(72.dp))
       }
     }
   }

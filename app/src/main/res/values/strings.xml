@@ -20,6 +20,10 @@
     <string name="call_end">End Call</string>
     <string name="call_mute">mute</string>
     <string name="call_keypad">keypad</string>
+    <string name="call_speaker">speaker</string>
+    <string name="call_record">record</string>
+    <string name="call_add_call">add call</string>
+    <string name="call_hold">hold</string>
     <string name="call_audio">audio</string>
     <string name="call_video">video</string>
     <string name="call_more">more</string>

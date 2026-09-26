@@ -24,13 +24,7 @@ import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Voicemail
-import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.Dialpad
-import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material.icons.outlined.StarOutline
-import androidx.compose.material.icons.outlined.Voicemail
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -55,18 +50,31 @@ import com.example.ui.theme.LocalIosColors
 data class TabItem(
   val tab: NavTab,
   val titleRes: Int,
-  val selectedIcon: ImageVector,
-  val unselectedIcon: ImageVector,
+  val icon: ImageVector,
 )
 
 private val tabs = listOf(
-  TabItem(NavTab.FAVOURITES, R.string.tab_favourites, Icons.Filled.Star, Icons.Outlined.StarOutline),
-  TabItem(NavTab.RECENTS, R.string.tab_recents, Icons.Filled.Schedule, Icons.Outlined.Schedule),
-  TabItem(NavTab.CONTACTS, R.string.tab_contacts, Icons.Filled.AccountCircle, Icons.Outlined.AccountCircle),
-  TabItem(NavTab.KEYPAD, R.string.tab_keypad, Icons.Filled.Dialpad, Icons.Outlined.Dialpad),
-  TabItem(NavTab.VOICEMAIL, R.string.tab_voicemail, Icons.Filled.Voicemail, Icons.Outlined.Voicemail),
+  TabItem(NavTab.FAVOURITES, R.string.tab_favourites, Icons.Filled.Star),
+  TabItem(NavTab.RECENTS, R.string.tab_recents, Icons.Filled.Schedule),
+  TabItem(NavTab.CONTACTS, R.string.tab_contacts, Icons.Filled.AccountCircle),
+  TabItem(NavTab.KEYPAD, R.string.tab_keypad, Icons.Filled.Dialpad),
+  TabItem(NavTab.VOICEMAIL, R.string.tab_voicemail, Icons.Filled.Voicemail),
 )
 
+/**
+ * Floating Liquid Glass iOS Bottom Navigation Bar.
+ *
+ * Light Mode:
+ * - Frosted white surface infused with subtle black/charcoal tint (6%–10% alpha)
+ * - Noticeable separation from the white background
+ * - Hairline dual-tone border with top highlight catch and dark-neutral rim
+ * - Diffused ambient drop shadow giving physical floating depth
+ * - Top edge specular reflection line
+ * - Selected tab in subtle translucent blue capsule
+ *
+ * Dark Mode:
+ * - Preserved dark charcoal glass with high-contrast active state
+ */
 @Composable
 fun IosBottomNav(
   currentTab: NavTab,
@@ -75,47 +83,91 @@ fun IosBottomNav(
   modifier: Modifier = Modifier,
 ) {
   val colors = LocalIosColors.current
-  val navShape = RoundedCornerShape(32.dp)
+  val navShape = RoundedCornerShape(36.dp)
 
-  // Translucent glass surface background
-  val glassBgColor = if (colors.isDark) {
-    Color(0xE61E1E22) // Translucent dark charcoal
-  } else {
-    Color(0xF0FFFFFF) // Translucent frost white
-  }
+  // 1. Surface Gradient
+  val lightNavTintGradient = Brush.verticalGradient(
+    colors = listOf(
+      Color(0x0F000000), // ~6% dark neutral tint at top
+      Color(0x1A000000), // ~10% dark neutral tint at bottom
+    ),
+  )
 
-  // Border outline for subtle glass effect
-  val borderColor = if (colors.isDark) {
-    Color(0x33FFFFFF)
-  } else {
-    Color(0x1F000000)
-  }
+  // 2. Hairline Border Brush
+  val lightBorderBrush = Brush.verticalGradient(
+    colors = listOf(
+      Color(0x99FFFFFF), // Reflective top catch light
+      Color(0x2B000000), // ~17% dark-neutral bottom rim
+    ),
+  )
+
+  val darkBorderBrush = Brush.verticalGradient(
+    colors = listOf(
+      Color(0x33FFFFFF),
+      Color(0x1AFFFFFF),
+    ),
+  )
+
+  // 3. Shadow Parameters
+  val elevation = if (colors.isDark) 8.dp else 10.dp
+  val spotShadowColor = if (colors.isDark) Color(0x50000000) else Color(0x26000000)
+  val ambientShadowColor = if (colors.isDark) Color(0x20000000) else Color(0x12000000)
 
   Box(
     modifier = modifier
       .fillMaxWidth()
       .navigationBarsPadding()
-      .padding(horizontal = 14.dp, vertical = 8.dp),
+      .padding(horizontal = 16.dp, vertical = 6.dp),
     contentAlignment = Alignment.Center,
   ) {
-    Surface(
+    Box(
       modifier = Modifier
         .fillMaxWidth()
         .shadow(
-          elevation = 14.dp,
+          elevation = elevation,
           shape = navShape,
-          spotColor = if (colors.isDark) Color(0x66000000) else Color(0x24000000),
-          ambientColor = if (colors.isDark) Color(0x33000000) else Color(0x1A000000),
+          spotColor = spotShadowColor,
+          ambientColor = ambientShadowColor,
         )
-        .border(width = 0.8.dp, color = borderColor, shape = navShape),
-      shape = navShape,
-      color = glassBgColor,
-      tonalElevation = 6.dp,
+        .clip(navShape)
+        .then(
+          if (colors.isDark) {
+            Modifier.background(Color(0xF01C1C1E))
+          } else {
+            // Light Mode: Frosted white + smoky charcoal depth gradient
+            Modifier
+              .background(Color(0xEEFFFFFF))
+              .background(lightNavTintGradient)
+          }
+        )
+        .border(
+          width = 0.65.dp,
+          brush = if (colors.isDark) darkBorderBrush else lightBorderBrush,
+          shape = navShape,
+        ),
     ) {
+      // Subtle top specular highlight reflection line in Light Mode
+      if (!colors.isDark) {
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(
+              Brush.horizontalGradient(
+                colors = listOf(
+                  Color.Transparent,
+                  Color(0x80FFFFFF),
+                  Color.Transparent,
+                ),
+              ),
+            ),
+        )
+      }
+
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .height(60.dp)
+          .height(58.dp)
           .padding(horizontal = 6.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
@@ -123,24 +175,29 @@ fun IosBottomNav(
         tabs.forEach { item ->
           val isSelected = currentTab == item.tab
           val title = stringResource(id = item.titleRes)
-
           val itemInteractionSource = remember { MutableInteractionSource() }
 
-          // Color animations for smooth transition
-          val targetColor = if (isSelected) {
+          val targetContentColor = if (isSelected) {
             IosBlue
           } else {
-            if (colors.isDark) Color(0xFF98989D) else Color(0xFF000000)
+            if (colors.isDark) Color(0xFFFFFFFF) else Color(0xFF000000)
           }
 
           val animatedColor by animateColorAsState(
-            targetValue = targetColor,
-            animationSpec = tween(durationMillis = 200),
+            targetValue = targetContentColor,
+            animationSpec = tween(durationMillis = 150),
             label = "tab_color_anim",
           )
 
+          val pillShape = RoundedCornerShape(20.dp)
           val pillBgColor = if (isSelected) {
-            if (colors.isDark) Color(0x29007AFF) else Color(0x1A007AFF)
+            if (colors.isDark) Color(0x33FFFFFF) else Color(0x1A007AFF)
+          } else {
+            Color.Transparent
+          }
+
+          val pillBorderColor = if (isSelected) {
+            if (colors.isDark) Color(0x40FFFFFF) else Color(0x29007AFF)
           } else {
             Color.Transparent
           }
@@ -148,9 +205,10 @@ fun IosBottomNav(
           Box(
             modifier = Modifier
               .weight(1f)
-              .height(50.dp)
-              .clip(RoundedCornerShape(25.dp))
+              .height(48.dp)
+              .clip(pillShape)
               .background(pillBgColor)
+              .border(0.5.dp, pillBorderColor, pillShape)
               .clickable(
                 interactionSource = itemInteractionSource,
                 indication = null,
@@ -166,7 +224,7 @@ fun IosBottomNav(
             ) {
               Box(contentAlignment = Alignment.TopEnd) {
                 Icon(
-                  imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
+                  imageVector = item.icon,
                   contentDescription = title,
                   tint = animatedColor,
                   modifier = Modifier.size(24.dp),
@@ -180,7 +238,7 @@ fun IosBottomNav(
                       .size(16.dp)
                       .clip(CircleShape)
                       .background(IosRed)
-                      .border(1.dp, glassBgColor, CircleShape),
+                      .testTag("voicemail_badge"),
                     contentAlignment = Alignment.Center,
                   ) {
                     Text(
@@ -196,9 +254,9 @@ fun IosBottomNav(
 
               Text(
                 text = title,
-                fontSize = 10.sp,
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                 color = animatedColor,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 2.dp),
               )
             }

@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,6 +35,9 @@ fun SearchBar(
   testTag: String = "search_bar",
 ) {
   val colors = LocalIosColors.current
+  val capsuleShape = RoundedCornerShape(24.dp)
+  val containerBg = if (colors.isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)
+  val borderColor = if (colors.isDark) Color(0x2EFFFFFF) else Color(0x14000000)
 
   Box(
     modifier = modifier
@@ -46,15 +50,15 @@ fun SearchBar(
       placeholder = {
         Text(
           text = placeholderText,
-          color = colors.textSecondary,
-          fontSize = 16.sp,
+          color = Color(0xFF8E8E93),
+          fontSize = 17.sp,
         )
       },
       leadingIcon = {
         Icon(
           imageVector = Icons.Filled.Search,
           contentDescription = "Search",
-          tint = colors.textSecondary,
+          tint = if (colors.isDark) Color.White else Color.Black,
           modifier = Modifier.size(20.dp),
         )
       },
@@ -79,7 +83,7 @@ fun SearchBar(
             Icon(
               imageVector = Icons.Filled.Mic,
               contentDescription = "Voice Search",
-              tint = colors.textSecondary,
+              tint = if (colors.isDark) Color.White else Color.Black,
               modifier = Modifier.size(20.dp),
             )
           }
@@ -87,19 +91,20 @@ fun SearchBar(
       },
       singleLine = true,
       colors = TextFieldDefaults.colors(
-        focusedContainerColor = colors.keypadButtonBg,
-        unfocusedContainerColor = colors.keypadButtonBg,
-        disabledContainerColor = colors.keypadButtonBg,
+        focusedContainerColor = containerBg,
+        unfocusedContainerColor = containerBg,
+        disabledContainerColor = containerBg,
         focusedIndicatorColor = Color.Transparent,
         unfocusedIndicatorColor = Color.Transparent,
         cursorColor = IosBlue,
         focusedTextColor = colors.textPrimary,
         unfocusedTextColor = colors.textPrimary,
       ),
-      shape = RoundedCornerShape(12.dp),
+      shape = capsuleShape,
       modifier = Modifier
         .fillMaxWidth()
-        .height(48.dp)
+        .height(46.dp)
+        .border(0.5.dp, borderColor, capsuleShape)
         .testTag(testTag),
     )
   }

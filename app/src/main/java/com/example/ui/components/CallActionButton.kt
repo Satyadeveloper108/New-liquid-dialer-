@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -57,6 +58,12 @@ fun CallActionButton(
     Box(
       modifier = Modifier
         .size(size)
+        .shadow(
+          elevation = 4.dp,
+          shape = CircleShape,
+          spotColor = if (type == CallActionType.CALL || type == CallActionType.ACCEPT) Color(0x3D34C759) else Color(0x3DFF3B30),
+          ambientColor = Color(0x1F000000),
+        )
         .clip(CircleShape)
         .background(bgColor),
       contentAlignment = Alignment.Center,

@@ -12,19 +12,30 @@ val IosPurple = Color(0xFFAF52DE)
 val IosTeal = Color(0xFF5AC8FA)
 val IosIndigo = Color(0xFF5856D6)
 
-// iOS Light Mode Surfaces & Text
+// iOS Light Mode Surfaces & Text (Native iOS Phone Baseline)
 val IosLightBackground = Color(0xFFFFFFFF)
 val IosLightGroupedBackground = Color(0xFFF2F2F7)
 val IosLightCard = Color(0xFFFFFFFF)
-val IosLightSeparator = Color(0xFFD1D1D6)
+val IosLightSeparator = Color(0xFFE5E5EA)
 val IosLightTextPrimary = Color(0xFF000000)
 val IosLightTextSecondary = Color(0xFF8E8E93)
-val IosLightKeypadBg = Color(0xFFE5E5EA)
-val IosLightKeypadPressed = Color(0xFFD1D1D6)
-val IosLightNavBg = Color(0xF5F9F9F9)
-val IosLightSelectedPill = Color(0x1A007AFF)
+val IosLightKeypadBg = Color(0xFFF8F9FA)
+val IosLightKeypadPressed = Color(0xFFE5E5EA)
+val IosLightNavBg = Color(0xF2FFFFFF)
+val IosLightSelectedPill = Color(0xFFE5E7EB)
 
-// iOS Dark Mode Surfaces & Text
+// Liquid Glass Light Mode Depth Tokens (Smoky Translucent Glass)
+val IosLightGlassTintCenter = Color(0x0C000000) // ~5% dark neutral tint in center
+val IosLightGlassTintEdge = Color(0x17000000)   // ~9% dark neutral tint near rim
+val IosLightGlassTintPressed = Color(0x28000000) // ~16% pressed tint
+val IosLightGlassBorderTop = Color(0x80FFFFFF)  // Specular top highlight catch
+val IosLightGlassBorderBottom = Color(0x2B000000) // Hairline dark neutral rim
+val IosLightGlassShadowSpot = Color(0x22000000) // Soft diffused ambient shadow
+val IosLightGlassShadowAmbient = Color(0x0F000000) // Broad diffused ambient shadow
+val IosLightGlassActiveTabPill = Color(0x1A007AFF) // Translucent blue selected pill
+val IosLightGlassActiveTabBorder = Color(0x29007AFF) // Subtle blue pill hairline
+
+// iOS Dark Mode Surfaces & Text (Preserved)
 val IosDarkBackground = Color(0xFF000000)
 val IosDarkGroupedBackground = Color(0xFF121212)
 val IosDarkCard = Color(0xFF1C1C1E)
@@ -34,8 +45,8 @@ val IosDarkTextPrimary = Color(0xFFFFFFFF)
 val IosDarkTextSecondary = Color(0xFF8E8E93)
 val IosDarkKeypadBg = Color(0xFF2C2C2E)
 val IosDarkKeypadPressed = Color(0xFF3A3A3C)
-val IosDarkNavBg = Color(0xF5161616)
-val IosDarkSelectedPill = Color(0x26007AFF)
+val IosDarkNavBg = Color(0xF01C1C1E)
+val IosDarkSelectedPill = Color(0x33FFFFFF)
 
 // Call Controls
 val CallAcceptGreen = Color(0xFF34C759)
