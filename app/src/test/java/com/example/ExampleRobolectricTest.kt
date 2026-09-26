@@ -19,6 +19,11 @@ import org.robolectric.annotation.Config
 @Config(sdk = [36])
 class ExampleRobolectricTest {
 
+  private fun createViewModel(): DialerViewModel {
+    val application = ApplicationProvider.getApplicationContext<android.app.Application>()
+    return DialerViewModel(application)
+  }
+
   @Test
   fun `read string from context`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
@@ -28,7 +33,7 @@ class ExampleRobolectricTest {
 
   @Test
   fun `entering digits 0 through 9 updates dialed digits immediately`() {
-    val viewModel = DialerViewModel()
+    val viewModel = createViewModel()
     for (digit in '0'..'9') {
       viewModel.appendDigit(digit)
     }
@@ -37,7 +42,7 @@ class ExampleRobolectricTest {
 
   @Test
   fun `entering star and pound appends correctly`() {
-    val viewModel = DialerViewModel()
+    val viewModel = createViewModel()
     viewModel.appendDigit('*')
     viewModel.appendDigit('1')
     viewModel.appendDigit('0')
@@ -48,7 +53,7 @@ class ExampleRobolectricTest {
 
   @Test
   fun `deleting one character removes only the last digit`() {
-    val viewModel = DialerViewModel()
+    val viewModel = createViewModel()
     viewModel.appendDigit('1')
     viewModel.appendDigit('2')
     viewModel.appendDigit('3')
@@ -63,7 +68,7 @@ class ExampleRobolectricTest {
 
   @Test
   fun `deleting all characters clears dialed buffer`() {
-    val viewModel = DialerViewModel()
+    val viewModel = createViewModel()
     viewModel.setDialedNumber("1234567890")
     assertEquals("1234567890", viewModel.dialedDigits.value)
 
@@ -73,7 +78,7 @@ class ExampleRobolectricTest {
 
   @Test
   fun `empty state delete behavior does nothing and does not crash`() {
-    val viewModel = DialerViewModel()
+    val viewModel = createViewModel()
     viewModel.clearDigits()
     assertEquals("", viewModel.dialedDigits.value)
 
@@ -86,7 +91,7 @@ class ExampleRobolectricTest {
 
   @Test
   fun `long press 0 inserts plus sign`() {
-    val viewModel = DialerViewModel()
+    val viewModel = createViewModel()
     viewModel.clearDigits()
     viewModel.appendPlus()
     assertEquals("+", viewModel.dialedDigits.value)
@@ -98,7 +103,7 @@ class ExampleRobolectricTest {
 
   @Test
   fun `preventing invalid repeated plus sign`() {
-    val viewModel = DialerViewModel()
+    val viewModel = createViewModel()
     viewModel.clearDigits()
     viewModel.appendPlus()
     assertEquals("+", viewModel.dialedDigits.value)
@@ -118,7 +123,7 @@ class ExampleRobolectricTest {
 
   @Test
   fun `normal tap on 0 continues inserting 0`() {
-    val viewModel = DialerViewModel()
+    val viewModel = createViewModel()
     viewModel.clearDigits()
     viewModel.appendDigit('0')
     viewModel.appendDigit('0')
@@ -127,7 +132,7 @@ class ExampleRobolectricTest {
 
   @Test
   fun `state persistence and raw number separated from formatted display`() {
-    val viewModel = DialerViewModel()
+    val viewModel = createViewModel()
     viewModel.clearDigits()
     viewModel.appendDigit('1')
     viewModel.appendDigit('2')
@@ -168,7 +173,7 @@ class ExampleRobolectricTest {
 
   @Test
   fun `tab selection transitions cleanly`() {
-    val viewModel = DialerViewModel()
+    val viewModel = createViewModel()
     viewModel.selectTab(NavTab.CONTACTS)
     assertEquals(NavTab.CONTACTS, viewModel.activeTab.value)
 
@@ -178,7 +183,7 @@ class ExampleRobolectricTest {
 
   @Test
   fun `call session starts and ends properly`() {
-    val viewModel = DialerViewModel()
+    val viewModel = createViewModel()
     viewModel.startCall(name = "Test Caller", number = "1234567")
     val session = viewModel.callSession.value
     assertNotNull(session)

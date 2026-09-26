@@ -311,205 +311,66 @@ fun ContactsScreen(
       ) {
         // My Card Section
         if (searchQuery.isEmpty()) {
-          item(key = "my_card") {
-            Row(
-              modifier = Modifier
-                .fillMaxWidth()
-                .clickable { }
-                .padding(horizontal = 16.dp, vertical = 10.dp)
-                .testTag("my_card_item"),
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              ContactAvatar(
-                initial = 'M',
-                colorIndex = 1,
-                size = 52.dp,
-              )
-              Spacer(modifier = Modifier.width(14.dp))
-              Column {
-                Text(
-                  text = "My Card",
-                  fontSize = 19.sp,
-                  fontWeight = FontWeight.Bold,
-                  color = colors.textPrimary,
-                )
-                Text(
-                  text = if (hasContactsPermission) "Real Device Contacts Connected" else "Preview Mode",
-                  fontSize = 13.sp,
-                  color = if (hasContactsPermission) Color(0xFF34C759) else colors.textSecondary,
-                )
-              }
-            }
-            HorizontalDivider(
-              modifier = Modifier.padding(start = 82.dp),
-              thickness = 0.5.dp,
-              color = colors.separator,
+          item(key = "my_card", contentType = "my_card") {
+            MyCardItem(
+              colors = colors,
+              hasContactsPermission = hasContactsPermission,
             )
           }
         }
 
         // Empty State: Device contacts enabled but 0 contacts on device
         if (hasContactsPermission && contacts.isEmpty() && !isLoadingContacts) {
-          item(key = "empty_device_contacts") {
-            Box(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(32.dp),
-              contentAlignment = Alignment.Center,
-            ) {
-              Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                  imageVector = Icons.Filled.ContactPhone,
-                  contentDescription = null,
-                  tint = colors.textSecondary,
-                  modifier = Modifier.size(56.dp),
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                  text = "No Contacts Found On Device",
-                  fontWeight = FontWeight.Bold,
-                  fontSize = 17.sp,
-                  color = colors.textPrimary,
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                  text = "Add contacts or populate demo contacts to test real device calling and dialing.",
-                  fontSize = 14.sp,
-                  color = colors.textSecondary,
-                  textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                  ElevatedButton(
-                    onClick = { showAddDialog = true },
-                    colors = ButtonDefaults.elevatedButtonColors(containerColor = IosBlue, contentColor = Color.White),
-                  ) {
-                    Text("+ Add Contact")
-                  }
-                  OutlinedButton(
-                    onClick = { onSeedDemoContacts() },
-                  ) {
-                    Text("Populate Demo Contacts")
-                  }
-                }
-              }
-            }
+          item(key = "empty_device_contacts", contentType = "empty_state") {
+            EmptyDeviceContactsItem(
+              colors = colors,
+              onAddContactClick = { showAddDialog = true },
+              onSeedDemoContacts = onSeedDemoContacts,
+            )
           }
         }
 
         // Alphabetically Grouped Contacts
         groupedContacts.forEach { (initial, contactList) ->
-          item(key = "header_$initial") {
-            Box(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-            ) {
-              Text(
-                text = initial.toString(),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = colors.textSecondary,
-              )
-            }
+          item(key = "header_$initial", contentType = "header") {
+            ContactHeaderItem(
+              initial = initial,
+              textColor = colors.textSecondary,
+            )
           }
 
-          items(contactList, key = { it.id }) { contact ->
-            Row(
-              modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onContactClick(contact) }
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .testTag("contact_item_${contact.id}"),
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              ContactAvatar(
-                initial = contact.initial,
-                colorIndex = contact.avatarColorIndex,
-                size = 46.dp,
-                photoUri = contact.photoUri,
-              )
-              Spacer(modifier = Modifier.width(14.dp))
-              Column(modifier = Modifier.weight(1f)) {
-                Text(
-                  text = contact.name,
-                  fontSize = 17.sp,
-                  fontWeight = FontWeight.Bold,
-                  color = colors.textPrimary,
-                )
-                Text(
-                  text = "${contact.type} • ${contact.phoneNumber}",
-                  fontSize = 13.sp,
-                  color = colors.textSecondary,
-                )
-              }
-
-              // Favorite Star Toggle
-              IconButton(onClick = { onToggleFavorite(contact.id) }) {
-                Icon(
-                  imageVector = if (contact.isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                  contentDescription = "Favorite",
-                  tint = if (contact.isFavorite) Color(0xFFFFCC00) else colors.textSecondary,
-                  modifier = Modifier.size(20.dp),
-                )
-              }
-
-              // Call Quick Button
-              IconButton(onClick = { onContactClick(contact) }) {
-                Icon(
-                  imageVector = Icons.Filled.Call,
-                  contentDescription = "Call",
-                  tint = Color(0xFF34C759),
-                  modifier = Modifier.size(20.dp),
-                )
-              }
-            }
-            HorizontalDivider(
-              modifier = Modifier.padding(start = 76.dp),
-              thickness = 0.5.dp,
-              color = colors.separator,
+          items(
+            items = contactList,
+            key = { it.id },
+            contentType = { "contact" },
+          ) { contact ->
+            ContactItemRow(
+              contact = contact,
+              colors = colors,
+              onContactClick = onContactClick,
+              onToggleFavorite = onToggleFavorite,
             )
           }
         }
 
-        item {
+        item(key = "bottom_spacer", contentType = "spacer") {
           Spacer(modifier = Modifier.height(72.dp))
         }
       }
 
       // 5. Alphabet Scrubber Bar on Right Edge
       if (contacts.isNotEmpty()) {
-        Column(
+        AlphabetScrubber(
+          onLetterClick = { letter ->
+            val targetIndex = letterToScrollIndex[letter]
+            if (targetIndex != null) {
+              scope.launch { listState.scrollToItem(targetIndex) }
+            }
+          },
           modifier = Modifier
             .align(Alignment.CenterEnd)
             .padding(end = 4.dp),
-          horizontalAlignment = Alignment.CenterHorizontally,
-          verticalArrangement = Arrangement.Center,
-        ) {
-          AlphabetList.forEach { letter ->
-            Text(
-              text = letter.toString(),
-              fontSize = 10.sp,
-              fontWeight = FontWeight.SemiBold,
-              color = IosBlue,
-              modifier = Modifier
-                .clickable {
-                  val targetIndex = letterToScrollIndex[letter]
-                  if (targetIndex != null) {
-                    scope.launch { listState.scrollToItem(targetIndex) }
-                  }
-                }
-                .padding(vertical = 0.5.dp, horizontal = 2.dp),
-            )
-          }
-          Text(
-            text = "#",
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = IosBlue,
-            modifier = Modifier.padding(vertical = 0.5.dp, horizontal = 2.dp),
-          )
-        }
+        )
       }
     }
   }
@@ -526,4 +387,222 @@ fun ContactsScreen(
   }
 }
 
+private val FavoriteGold = Color(0xFFFFCC00)
+private val CallGreen = Color(0xFF34C759)
+private val ConnectedGreen = Color(0xFF34C759)
 private val AlphabetList = ('A'..'Z').toList()
+
+@Composable
+private fun MyCardItem(
+  colors: com.example.ui.theme.IosThemeColors,
+  hasContactsPermission: Boolean,
+  modifier: Modifier = Modifier,
+) {
+  Column(modifier = modifier.fillMaxWidth()) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .clickable { }
+        .padding(horizontal = 16.dp, vertical = 10.dp)
+        .testTag("my_card_item"),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      ContactAvatar(
+        initial = 'M',
+        colorIndex = 1,
+        size = 52.dp,
+      )
+      Spacer(modifier = Modifier.width(14.dp))
+      Column {
+        Text(
+          text = "My Card",
+          fontSize = 19.sp,
+          fontWeight = FontWeight.Bold,
+          color = colors.textPrimary,
+        )
+        Text(
+          text = if (hasContactsPermission) "Real Device Contacts Connected" else "Preview Mode",
+          fontSize = 13.sp,
+          color = if (hasContactsPermission) ConnectedGreen else colors.textSecondary,
+        )
+      }
+    }
+    HorizontalDivider(
+      modifier = Modifier.padding(start = 82.dp),
+      thickness = 0.5.dp,
+      color = colors.separator,
+    )
+  }
+}
+
+@Composable
+private fun EmptyDeviceContactsItem(
+  colors: com.example.ui.theme.IosThemeColors,
+  onAddContactClick: () -> Unit,
+  onSeedDemoContacts: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  Box(
+    modifier = modifier
+      .fillMaxWidth()
+      .padding(32.dp),
+    contentAlignment = Alignment.Center,
+  ) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+      Icon(
+        imageVector = Icons.Filled.ContactPhone,
+        contentDescription = null,
+        tint = colors.textSecondary,
+        modifier = Modifier.size(56.dp),
+      )
+      Spacer(modifier = Modifier.height(12.dp))
+      Text(
+        text = "No Contacts Found On Device",
+        fontWeight = FontWeight.Bold,
+        fontSize = 17.sp,
+        color = colors.textPrimary,
+      )
+      Spacer(modifier = Modifier.height(6.dp))
+      Text(
+        text = "Add contacts or populate demo contacts to test real device calling and dialing.",
+        fontSize = 14.sp,
+        color = colors.textSecondary,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+      )
+      Spacer(modifier = Modifier.height(16.dp))
+      Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        ElevatedButton(
+          onClick = onAddContactClick,
+          colors = ButtonDefaults.elevatedButtonColors(containerColor = IosBlue, contentColor = Color.White),
+        ) {
+          Text("+ Add Contact")
+        }
+        OutlinedButton(
+          onClick = onSeedDemoContacts,
+        ) {
+          Text("Populate Demo Contacts")
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun ContactHeaderItem(
+  initial: Char,
+  textColor: Color,
+  modifier: Modifier = Modifier,
+) {
+  Box(
+    modifier = modifier
+      .fillMaxWidth()
+      .padding(horizontal = 16.dp, vertical = 6.dp),
+  ) {
+    Text(
+      text = initial.toString(),
+      fontSize = 14.sp,
+      fontWeight = FontWeight.Bold,
+      color = textColor,
+    )
+  }
+}
+
+@Composable
+private fun ContactItemRow(
+  contact: Contact,
+  colors: com.example.ui.theme.IosThemeColors,
+  onContactClick: (Contact) -> Unit,
+  onToggleFavorite: (String) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val handleRowClick = remember(contact, onContactClick) { { onContactClick(contact) } }
+  val handleFavoriteClick = remember(contact.id, onToggleFavorite) { { onToggleFavorite(contact.id) } }
+
+  Column(modifier = modifier.fillMaxWidth()) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .clickable(onClick = handleRowClick)
+        .padding(horizontal = 16.dp, vertical = 8.dp)
+        .testTag("contact_item_${contact.id}"),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      ContactAvatar(
+        initial = contact.initial,
+        colorIndex = contact.avatarColorIndex,
+        size = 46.dp,
+        photoUri = contact.photoUri,
+      )
+      Spacer(modifier = Modifier.width(14.dp))
+      Column(modifier = Modifier.weight(1f)) {
+        Text(
+          text = contact.name,
+          fontSize = 17.sp,
+          fontWeight = FontWeight.Bold,
+          color = colors.textPrimary,
+        )
+        Text(
+          text = "${contact.type} • ${contact.phoneNumber}",
+          fontSize = 13.sp,
+          color = colors.textSecondary,
+        )
+      }
+
+      // Favorite Star Toggle
+      IconButton(onClick = handleFavoriteClick) {
+        Icon(
+          imageVector = if (contact.isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+          contentDescription = "Favorite",
+          tint = if (contact.isFavorite) FavoriteGold else colors.textSecondary,
+          modifier = Modifier.size(20.dp),
+        )
+      }
+
+      // Call Quick Button
+      IconButton(onClick = handleRowClick) {
+        Icon(
+          imageVector = Icons.Filled.Call,
+          contentDescription = "Call",
+          tint = CallGreen,
+          modifier = Modifier.size(20.dp),
+        )
+      }
+    }
+    HorizontalDivider(
+      modifier = Modifier.padding(start = 76.dp),
+      thickness = 0.5.dp,
+      color = colors.separator,
+    )
+  }
+}
+
+@Composable
+private fun AlphabetScrubber(
+  onLetterClick: (Char) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  Column(
+    modifier = modifier,
+    horizontalAlignment = Alignment.CenterHorizontally,
+    verticalArrangement = Arrangement.Center,
+  ) {
+    AlphabetList.forEach { letter ->
+      Text(
+        text = letter.toString(),
+        fontSize = 10.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = IosBlue,
+        modifier = Modifier
+          .clickable { onLetterClick(letter) }
+          .padding(vertical = 0.5.dp, horizontal = 2.dp),
+      )
+    }
+    Text(
+      text = "#",
+      fontSize = 10.sp,
+      fontWeight = FontWeight.SemiBold,
+      color = IosBlue,
+      modifier = Modifier.padding(vertical = 0.5.dp, horizontal = 2.dp),
+    )
+  }
+}

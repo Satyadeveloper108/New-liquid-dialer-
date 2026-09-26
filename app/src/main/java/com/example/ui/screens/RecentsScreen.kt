@@ -56,7 +56,11 @@ import com.example.ui.components.ContactAvatar
 import com.example.ui.components.SegmentedControl
 import com.example.ui.theme.IosBlue
 import com.example.ui.theme.IosRed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import com.example.ui.theme.IosThemeColors
 import com.example.ui.theme.LocalIosColors
+
+private val SilhouetteBgColor = Color(0xFF8FA3C7)
 
 /**
  * Recents Screen matching original iOS reference:
@@ -80,6 +84,7 @@ fun RecentsScreen(
 ) {
   val colors = LocalIosColors.current
   var isEditMode by remember { mutableStateOf(false) }
+  val listState = rememberLazyListState()
 
   val callLogPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
     contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
@@ -220,145 +225,181 @@ fun RecentsScreen(
       }
     } else {
       LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
       ) {
-        items(recents, key = { it.id }) { item ->
-          val isMissed = item.callType == CallType.MISSED
-          val titleColor = if (isMissed) IosRed else colors.textPrimary
-
-          Row(
-            modifier = Modifier
-              .fillMaxWidth()
-              .clickable { onCallRecordClick(item) }
-              .padding(horizontal = 16.dp, vertical = 10.dp)
-              .testTag("recent_item_${item.id}"),
-            verticalAlignment = Alignment.CenterVertically,
-          ) {
-            // Delete action in edit mode
-            AnimatedVisibility(
-              visible = isEditMode,
-              enter = fadeIn(),
-              exit = fadeOut(),
-            ) {
-              IconButton(
-                onClick = { onDeleteRecord(item.id) },
-                modifier = Modifier
-                  .padding(end = 8.dp)
-                  .size(28.dp),
-              ) {
-                Icon(
-                  imageVector = Icons.Filled.RemoveCircle,
-                  contentDescription = "Delete call entry",
-                  tint = IosRed,
-                  modifier = Modifier.size(24.dp),
-                )
-              }
-            }
-
-            // Circular Avatar (Initial or Silhouette)
-            if (item.contactName.firstOrNull()?.isLetter() == true) {
-              ContactAvatar(
-                initial = item.contactName.first().uppercaseChar(),
-                colorIndex = (item.id.hashCode().coerceAtLeast(0) % 5),
-                size = 46.dp,
-              )
-            } else {
-              Box(
-                modifier = Modifier
-                  .size(46.dp)
-                  .clip(CircleShape)
-                  .background(Color(0xFF8FA3C7)),
-                contentAlignment = Alignment.Center,
-              ) {
-                Icon(
-                  imageVector = Icons.Filled.Person,
-                  contentDescription = null,
-                  tint = Color.White,
-                  modifier = Modifier.size(28.dp),
-                )
-              }
-            }
-
-            Spacer(modifier = Modifier.width(14.dp))
-
-            // Contact Name / Number & Subtitle
-            Column(
-              modifier = Modifier.weight(1f),
-            ) {
-              Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                  text = item.contactName,
-                  fontSize = 17.sp,
-                  fontWeight = FontWeight.Bold,
-                  color = titleColor,
-                )
-                if (item.repeatCount > 1) {
-                  Text(
-                    text = " (${item.repeatCount})",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = titleColor,
-                  )
-                }
-              }
-
-              Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.padding(top = 2.dp),
-              ) {
-                val arrowIcon = when (item.callType) {
-                  CallType.OUTGOING -> Icons.AutoMirrored.Filled.CallMade
-                  CallType.INCOMING -> Icons.AutoMirrored.Filled.CallReceived
-                  CallType.MISSED -> Icons.Filled.CallMissed
-                }
-                Icon(
-                  imageVector = arrowIcon,
-                  contentDescription = null,
-                  tint = colors.textSecondary,
-                  modifier = Modifier.size(13.dp),
-                )
-                Text(
-                  text = "${item.phoneType.lowercase()} • ${item.phoneNumber}",
-                  fontSize = 13.sp,
-                  color = colors.textSecondary,
-                )
-              }
-            }
-
-            // Time / Date
-            Text(
-              text = item.timeFormatted,
-              fontSize = 14.sp,
-              color = colors.textSecondary,
-              modifier = Modifier.padding(end = 8.dp),
-            )
-
-            // Circular Info (i) button in iOS Blue
-            IconButton(
-              onClick = { /* Info details */ },
-              modifier = Modifier.size(28.dp),
-            ) {
-              Icon(
-                imageVector = Icons.Outlined.Info,
-                contentDescription = "Call Info",
-                tint = IosBlue,
-                modifier = Modifier.size(22.dp),
-              )
-            }
-          }
-
-          HorizontalDivider(
-            modifier = Modifier.padding(start = 76.dp),
-            thickness = 0.5.dp,
-            color = colors.separator,
+        items(
+          items = recents,
+          key = { it.id },
+          contentType = { "recent_call" },
+        ) { item ->
+          RecentCallRow(
+            item = item,
+            isEditMode = isEditMode,
+            colors = colors,
+            onCallRecordClick = onCallRecordClick,
+            onDeleteRecord = onDeleteRecord,
           )
         }
 
-        item {
+        item(key = "recents_bottom_spacer", contentType = "spacer") {
           Spacer(modifier = Modifier.height(72.dp))
         }
       }
     }
+  }
+}
+
+@Composable
+private fun RecentCallRow(
+  item: CallRecord,
+  isEditMode: Boolean,
+  colors: IosThemeColors,
+  onCallRecordClick: (CallRecord) -> Unit,
+  onDeleteRecord: (String) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val isMissed = remember(item.callType) { item.callType == CallType.MISSED }
+  val titleColor = if (isMissed) IosRed else colors.textPrimary
+  val arrowIcon = remember(item.callType) {
+    when (item.callType) {
+      CallType.OUTGOING -> Icons.AutoMirrored.Filled.CallMade
+      CallType.INCOMING -> Icons.AutoMirrored.Filled.CallReceived
+      CallType.MISSED -> Icons.Filled.CallMissed
+    }
+  }
+  val subtitleText = remember(item.phoneType, item.phoneNumber) {
+    "${item.phoneType.lowercase()} • ${item.phoneNumber}"
+  }
+  val avatarInitial = remember(item.contactName) {
+    item.contactName.firstOrNull()?.takeIf { it.isLetter() }?.uppercaseChar()
+  }
+  val colorIndex = remember(item.id) {
+    (item.id.hashCode().coerceAtLeast(0) % 5)
+  }
+
+  Column(modifier = modifier.fillMaxWidth()) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .clickable { onCallRecordClick(item) }
+        .padding(horizontal = 16.dp, vertical = 10.dp)
+        .testTag("recent_item_${item.id}"),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      // Delete action in edit mode
+      AnimatedVisibility(
+        visible = isEditMode,
+        enter = fadeIn(),
+        exit = fadeOut(),
+      ) {
+        IconButton(
+          onClick = { onDeleteRecord(item.id) },
+          modifier = Modifier
+            .padding(end = 8.dp)
+            .size(28.dp),
+        ) {
+          Icon(
+            imageVector = Icons.Filled.RemoveCircle,
+            contentDescription = "Delete call entry",
+            tint = IosRed,
+            modifier = Modifier.size(24.dp),
+          )
+        }
+      }
+
+      // Circular Avatar (Initial or Silhouette)
+      if (avatarInitial != null) {
+        ContactAvatar(
+          initial = avatarInitial,
+          colorIndex = colorIndex,
+          size = 46.dp,
+        )
+      } else {
+        Box(
+          modifier = Modifier
+            .size(46.dp)
+            .clip(CircleShape)
+            .background(SilhouetteBgColor),
+          contentAlignment = Alignment.Center,
+        ) {
+          Icon(
+            imageVector = Icons.Filled.Person,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(28.dp),
+          )
+        }
+      }
+
+      Spacer(modifier = Modifier.width(14.dp))
+
+      // Contact Name / Number & Subtitle
+      Column(
+        modifier = Modifier.weight(1f),
+      ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text(
+            text = item.contactName,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold,
+            color = titleColor,
+          )
+          if (item.repeatCount > 1) {
+            Text(
+              text = " (${item.repeatCount})",
+              fontSize = 15.sp,
+              fontWeight = FontWeight.Bold,
+              color = titleColor,
+            )
+          }
+        }
+
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(4.dp),
+          modifier = Modifier.padding(top = 2.dp),
+        ) {
+          Icon(
+            imageVector = arrowIcon,
+            contentDescription = null,
+            tint = colors.textSecondary,
+            modifier = Modifier.size(13.dp),
+          )
+          Text(
+            text = subtitleText,
+            fontSize = 13.sp,
+            color = colors.textSecondary,
+          )
+        }
+      }
+
+      // Time / Date
+      Text(
+        text = item.timeFormatted,
+        fontSize = 14.sp,
+        color = colors.textSecondary,
+        modifier = Modifier.padding(end = 8.dp),
+      )
+
+      // Circular Info (i) button in iOS Blue
+      IconButton(
+        onClick = { /* Info details */ },
+        modifier = Modifier.size(28.dp),
+      ) {
+        Icon(
+          imageVector = Icons.Outlined.Info,
+          contentDescription = "Call Info",
+          tint = IosBlue,
+          modifier = Modifier.size(22.dp),
+        )
+      }
+    }
+
+    HorizontalDivider(
+      modifier = Modifier.padding(start = 76.dp),
+      thickness = 0.5.dp,
+      color = colors.separator,
+    )
   }
 }
