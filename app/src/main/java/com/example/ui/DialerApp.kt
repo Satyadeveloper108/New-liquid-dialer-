@@ -35,6 +35,7 @@ import com.example.viewmodel.DialerViewModel
 @Composable
 fun DialerApp(
   viewModel: DialerViewModel,
+  onRequestDefaultDialer: (() -> Unit)? = null,
   modifier: Modifier = Modifier,
 ) {
   val colors = LocalIosColors.current
@@ -110,6 +111,7 @@ fun DialerApp(
                 recents = recents,
                 selectedFilter = recentsFilter,
                 hasCallLogPermission = hasCallLogPermission,
+                onRequestDefaultDialer = onRequestDefaultDialer,
                 onFilterSelected = { viewModel.setRecentsFilter(it) },
                 onCallRecordClick = { record ->
                   viewModel.startCall(record.contactName, record.phoneNumber)
@@ -161,7 +163,6 @@ fun DialerApp(
                 onClearDigits = { viewModel.clearDigits() },
                 onSetDialedNumber = { viewModel.setDialedNumber(it) },
                 onStartCall = { number -> viewModel.startCall(number = number) },
-                onSimulateIncomingCall = { viewModel.simulateIncomingCall() },
                 onAddNumberToContact = { number ->
                   prefilledAddContactNumber = number
                 },

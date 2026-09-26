@@ -122,6 +122,43 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
     }
   }
 
+  fun checkCallLogPermission(context: Context): Boolean {
+    return repository.hasCallLogPermission(context)
+  }
+
+  fun checkContactsPermission(context: Context): Boolean {
+    return repository.hasContactsPermission(context)
+  }
+
+  fun refreshPermissions(context: Context) {
+    val hasContacts = repository.hasContactsPermission(context)
+    val hasCall = repository.hasCallLogPermission(context)
+
+    if (hasContacts != _hasContactsPermission.value) {
+      _hasContactsPermission.value = hasContacts
+      if (hasContacts) {
+        loadRealContacts()
+      }
+    }
+    if (hasCall != _hasCallLogPermission.value) {
+      _hasCallLogPermission.value = hasCall
+      if (hasCall) {
+        loadRealCallLogs()
+      }
+    }
+  }
+
+  fun onStartupPermissionsResult(contactsGranted: Boolean, callLogGranted: Boolean) {
+    _hasContactsPermission.value = contactsGranted
+    if (contactsGranted) {
+      loadRealContacts()
+    }
+    _hasCallLogPermission.value = callLogGranted
+    if (callLogGranted) {
+      loadRealCallLogs()
+    }
+  }
+
   fun onContactsPermissionResult(isGranted: Boolean) {
     _hasContactsPermission.value = isGranted
     if (isGranted) {

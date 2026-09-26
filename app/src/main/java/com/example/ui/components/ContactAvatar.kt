@@ -18,6 +18,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 
+import androidx.compose.ui.platform.LocalContext
+import coil.request.ImageRequest
+
 private val AvatarGradients = listOf(
   listOf(Color(0xFF8E8E93), Color(0xFF636366)),
   listOf(Color(0xFF007AFF), Color(0xFF0051A8)),
@@ -29,6 +32,9 @@ private val AvatarGradients = listOf(
   listOf(Color(0xFF5AC8FA), Color(0xFF3291B8)),
 )
 
+// Precomputed static brushes to eliminate allocation during scrolling
+private val AvatarGradientBrushes = AvatarGradients.map { Brush.verticalGradient(it) }
+
 @Composable
 fun ContactAvatar(
   initial: Char,
@@ -38,8 +44,15 @@ fun ContactAvatar(
   modifier: Modifier = Modifier,
 ) {
   if (!photoUri.isNullOrBlank()) {
+    val context = LocalContext.current
+    val imageRequest = remember(photoUri) {
+      ImageRequest.Builder(context)
+        .data(photoUri)
+        .crossfade(false)
+        .build()
+    }
     AsyncImage(
-      model = photoUri,
+      model = imageRequest,
       contentDescription = null,
       contentScale = ContentScale.Crop,
       modifier = modifier
@@ -47,14 +60,14 @@ fun ContactAvatar(
         .clip(CircleShape),
     )
   } else {
-    val gradientColors = AvatarGradients[colorIndex.coerceIn(0, AvatarGradients.lastIndex)]
+    val brush = AvatarGradientBrushes[colorIndex.coerceIn(0, AvatarGradientBrushes.lastIndex)]
     val fontSize = (size.value * 0.44f).sp
 
     Box(
       modifier = modifier
         .size(size)
         .clip(CircleShape)
-        .background(Brush.verticalGradient(gradientColors)),
+        .background(brush),
       contentAlignment = Alignment.Center,
     ) {
       Text(

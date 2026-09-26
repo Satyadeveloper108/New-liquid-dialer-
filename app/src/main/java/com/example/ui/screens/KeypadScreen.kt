@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
-import androidx.compose.material.icons.automirrored.filled.PhoneCallback
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -66,7 +65,7 @@ fun KeypadScreen(
   onClearDigits: () -> Unit,
   onSetDialedNumber: (String) -> Unit,
   onStartCall: (String) -> Unit,
-  onSimulateIncomingCall: () -> Unit,
+  onSimulateIncomingCall: (() -> Unit)? = null,
   onAddNumberToContact: ((String) -> Unit)? = null,
   modifier: Modifier = Modifier,
 ) {
@@ -82,46 +81,7 @@ fun KeypadScreen(
     horizontalAlignment = Alignment.CenterHorizontally,
     verticalArrangement = Arrangement.SpaceBetween,
   ) {
-    // Top Simulator Button (Discreet)
-    Row(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(top = 8.dp),
-      horizontalArrangement = Arrangement.End,
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      Box(
-        modifier = Modifier
-          .clip(CircleShape)
-          .background(if (colors.isDark) Color(0x33FFFFFF) else Color(0xFFF2F2F7))
-          .border(
-            width = 0.5.dp,
-            color = if (colors.isDark) Color(0x26FFFFFF) else Color(0x1F000000),
-            shape = CircleShape,
-          )
-          .clickable { onSimulateIncomingCall() }
-          .testTag("preview_incoming_call_button"),
-      ) {
-        Row(
-          modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-          Icon(
-            imageVector = Icons.AutoMirrored.Filled.PhoneCallback,
-            contentDescription = "Simulate Incoming Call",
-            tint = IosBlue,
-            modifier = Modifier.size(16.dp),
-          )
-          Text(
-            text = "Test Incoming Call",
-            color = IosBlue,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-          )
-        }
-      }
-    }
+    Spacer(modifier = Modifier.height(8.dp))
 
     // Dialed Number Display Area
     Column(

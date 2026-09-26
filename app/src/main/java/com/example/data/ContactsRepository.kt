@@ -30,10 +30,19 @@ class ContactsRepository {
   }
 
   fun hasCallLogPermission(context: Context): Boolean {
-    return ContextCompat.checkSelfPermission(
+    val permGranted = ContextCompat.checkSelfPermission(
       context,
       Manifest.permission.READ_CALL_LOG,
     ) == PackageManager.PERMISSION_GRANTED
+    if (permGranted) return true
+
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+      val roleManager = context.getSystemService(android.app.role.RoleManager::class.java)
+      if (roleManager != null && roleManager.isRoleHeld(android.app.role.RoleManager.ROLE_DIALER)) {
+        return true
+      }
+    }
+    return false
   }
 
   suspend fun getDeviceContacts(context: Context): List<Contact> = withContext(Dispatchers.IO) {

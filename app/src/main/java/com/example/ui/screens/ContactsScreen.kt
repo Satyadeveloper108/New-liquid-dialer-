@@ -93,8 +93,22 @@ fun ContactsScreen(
     onPermissionResult(isGranted)
   }
 
-  val groupedContacts = contacts.groupBy { it.initial }
-  val alphabet = ('A'..'Z').toList()
+  val groupedContacts = remember(contacts) { contacts.groupBy { it.initial } }
+  val letterToScrollIndex = remember(groupedContacts, searchQuery, hasContactsPermission, contacts.isEmpty(), isLoadingContacts) {
+    var currentIndex = 0
+    if (searchQuery.isEmpty()) {
+      currentIndex++ // "my_card"
+    }
+    if (hasContactsPermission && contacts.isEmpty() && !isLoadingContacts) {
+      currentIndex++ // "empty_device_contacts"
+    }
+    val map = mutableMapOf<Char, Int>()
+    groupedContacts.forEach { (initial, list) ->
+      map[initial] = currentIndex
+      currentIndex += 1 + list.size // header + list items
+    }
+    map
+  }
 
   Column(
     modifier = modifier
@@ -472,7 +486,7 @@ fun ContactsScreen(
           horizontalAlignment = Alignment.CenterHorizontally,
           verticalArrangement = Arrangement.Center,
         ) {
-          alphabet.forEach { letter ->
+          AlphabetList.forEach { letter ->
             Text(
               text = letter.toString(),
               fontSize = 10.sp,
@@ -480,9 +494,9 @@ fun ContactsScreen(
               color = IosBlue,
               modifier = Modifier
                 .clickable {
-                  val index = contacts.indexOfFirst { it.initial == letter }
-                  if (index >= 0) {
-                    scope.launch { listState.animateScrollToItem(index) }
+                  val targetIndex = letterToScrollIndex[letter]
+                  if (targetIndex != null) {
+                    scope.launch { listState.scrollToItem(targetIndex) }
                   }
                 }
                 .padding(vertical = 0.5.dp, horizontal = 2.dp),
@@ -511,3 +525,5 @@ fun ContactsScreen(
     )
   }
 }
+
+private val AlphabetList = ('A'..'Z').toList()

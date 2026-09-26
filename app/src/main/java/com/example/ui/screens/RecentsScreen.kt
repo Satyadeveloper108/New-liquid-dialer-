@@ -71,6 +71,7 @@ fun RecentsScreen(
   recents: List<CallRecord>,
   selectedFilter: RecentsFilter,
   hasCallLogPermission: Boolean = true,
+  onRequestDefaultDialer: (() -> Unit)? = null,
   onFilterSelected: (RecentsFilter) -> Unit,
   onCallRecordClick: (CallRecord) -> Unit,
   onDeleteRecord: (String) -> Unit,
@@ -190,7 +191,13 @@ fun RecentsScreen(
             )
           }
           androidx.compose.material3.TextButton(
-            onClick = { callLogPermissionLauncher.launch(android.Manifest.permission.READ_CALL_LOG) },
+            onClick = {
+              if (onRequestDefaultDialer != null) {
+                onRequestDefaultDialer()
+              } else {
+                callLogPermissionLauncher.launch(android.Manifest.permission.READ_CALL_LOG)
+              }
+            },
           ) {
             Text("Allow", color = IosBlue, fontWeight = FontWeight.Bold)
           }
