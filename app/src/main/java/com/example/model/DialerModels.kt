@@ -20,9 +20,28 @@ enum class RecentsFilter {
 }
 
 enum class CallState {
-  INCOMING,
+  RINGING,
+  DIALING,
   ACTIVE,
-  ENDED
+  HOLDING,
+  DISCONNECTED,
+  INCOMING,
+  ENDED;
+
+  val isRinging: Boolean
+    get() = this == RINGING || this == INCOMING
+
+  val isDialing: Boolean
+    get() = this == DIALING
+
+  val isActive: Boolean
+    get() = this == ACTIVE
+
+  val isHolding: Boolean
+    get() = this == HOLDING
+
+  val isDisconnected: Boolean
+    get() = this == DISCONNECTED || this == ENDED
 }
 
 data class Contact(
@@ -69,7 +88,23 @@ data class CallSession(
   val isMuted: Boolean = false,
   val isSpeaker: Boolean = false,
   val isKeypadOpen: Boolean = false,
+  val isRealCall: Boolean = false,
+  val isOnHold: Boolean = false,
+  val isBluetoothAvailable: Boolean = false,
+  val isBluetoothActive: Boolean = false,
+  val audioEndpointName: String = "speaker",
+  val heldCallName: String? = null,
+  val heldCallNumber: String? = null,
+  val canSwapCalls: Boolean = false,
+  val canMergeCalls: Boolean = false,
+  val isConference: Boolean = false,
+  val waitingCallName: String? = null,
+  val waitingCallNumber: String? = null,
+  val hasWaitingCall: Boolean = false,
 ) {
+  val hasMultipleCalls: Boolean
+    get() = heldCallName != null || isConference || hasWaitingCall
+
   val formattedDuration: String
     get() {
       val minutes = durationSeconds / 60

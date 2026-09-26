@@ -112,8 +112,12 @@ fun MiniCallBanner(
                 overflow = TextOverflow.Ellipsis,
               )
               Text(
-                text = callSession.formattedDuration,
-                color = CallAcceptGreen,
+                text = when {
+                  callSession.state.isDialing -> "calling..."
+                  callSession.state.isHolding || callSession.isOnHold -> "on hold"
+                  else -> callSession.formattedDuration
+                },
+                color = if (callSession.state.isHolding || callSession.isOnHold) Color(0xFFFF9500) else CallAcceptGreen,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
               )

@@ -17,6 +17,7 @@ import com.example.model.Contact
 import com.example.model.NavTab
 import com.example.model.RecentsFilter
 import com.example.model.VoicemailItem
+import com.example.telecom.TelecomCallManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -101,10 +102,28 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
   val isCallMinimized: StateFlow<Boolean> = _isCallMinimized.asStateFlow()
 
   private var callTimerJob: Job? = null
+  private var dialingJob: Job? = null
   private val dtmfPlayer = com.example.audio.DtmfPlayer()
 
   init {
     loadDeviceDataIfPermitted()
+
+    // Connect real Telecom call lookup and state listener
+    TelecomCallManager.setContactNameLookup { number ->
+      findContactName(number)
+    }
+
+    viewModelScope.launch {
+      TelecomCallManager.telecomCallSession.collect { realSession ->
+        if (realSession != null) {
+          _callSession.value = realSession
+          _isCallMinimized.value = false
+        } else if (_callSession.value?.isRealCall == true) {
+          _callSession.value = null
+          _isCallMinimized.value = false
+        }
+      }
+    }
   }
 
   fun loadDeviceDataIfPermitted() {
@@ -330,39 +349,69 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
     }
   }
 
-  // In-app Call Actions
-  fun startCall(name: String? = null, number: String) {
+  // In-app & Cellular Call Actions
+  fun startOutgoingCall(name: String? = null, number: String) {
+    startCall(name = name, number = number, initialState = CallState.DIALING)
+  }
+
+  fun startCall(
+    name: String? = null,
+    number: String,
+    initialState: CallState = CallState.ACTIVE,
+  ) {
     if (number.isBlank()) return
     val contactName = name ?: findContactName(number) ?: number
     callTimerJob?.cancel()
+    dialingJob?.cancel()
+
+    // Trigger real cellular outgoing call
+    val isReal = TelecomCallManager.placeOutgoingCall(getApplication(), number)
+
     _callSession.value = CallSession(
       callerName = contactName,
       phoneNumber = number,
-      state = CallState.ACTIVE,
+      state = initialState,
       durationSeconds = 0,
+      isRealCall = isReal,
     )
     _isCallMinimized.value = false
-    startCallTimer()
+
+    if (initialState == CallState.ACTIVE) {
+      startCallTimer()
+    } else if (initialState == CallState.DIALING) {
+      // In standalone or test environments where InCallService might not bind,
+      // simulate realistic ringback connection after 3s
+      dialingJob = viewModelScope.launch {
+        delay(3000)
+        if (_callSession.value?.state == CallState.DIALING) {
+          _callSession.update { it?.copy(state = CallState.ACTIVE) }
+          startCallTimer()
+        }
+      }
+    }
   }
 
   fun simulateIncomingCall(name: String = "Pupa Village", number: String = "+1 (555) 890-4321") {
     callTimerJob?.cancel()
+    dialingJob?.cancel()
     _callSession.value = CallSession(
       callerName = name,
       phoneNumber = number,
-      state = CallState.INCOMING,
+      state = CallState.RINGING,
       durationSeconds = 0,
     )
     _isCallMinimized.value = false
   }
 
   fun acceptCall() {
+    TelecomCallManager.answer()
     val current = _callSession.value ?: return
     _callSession.value = current.copy(state = CallState.ACTIVE)
     startCallTimer()
   }
 
   fun declineCall() {
+    TelecomCallManager.reject()
     val current = _callSession.value
     if (current != null) {
       val newRecord = CallRecord(
@@ -376,24 +425,27 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
       _recents.update { listOf(newRecord) + it }
     }
     callTimerJob?.cancel()
+    dialingJob?.cancel()
     _callSession.value = null
     _isCallMinimized.value = false
   }
 
   fun endCall() {
+    TelecomCallManager.endCall()
     val current = _callSession.value
     if (current != null) {
       val newRecord = CallRecord(
         id = System.currentTimeMillis().toString(),
         contactName = current.callerName,
         phoneNumber = current.phoneNumber,
-        callType = CallType.OUTGOING,
+        callType = if (current.state.isRinging) CallType.MISSED else CallType.OUTGOING,
         timeFormatted = "Just now",
         dateFormatted = "Today",
       )
       _recents.update { listOf(newRecord) + it }
     }
     callTimerJob?.cancel()
+    dialingJob?.cancel()
     _callSession.value = null
     _isCallMinimized.value = false
   }
@@ -407,20 +459,128 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
   }
 
   fun toggleMute() {
-    _callSession.update { current ->
-      current?.copy(isMuted = !current.isMuted)
-    }
+    TelecomCallManager.toggleMute()
   }
 
   fun toggleSpeaker() {
+    val context = getApplication<Application>()
+    TelecomCallManager.toggleAudioEndpoint(context)
+  }
+
+  fun toggleHold() {
+    TelecomCallManager.toggleHold()
     _callSession.update { current ->
-      current?.copy(isSpeaker = !current.isSpeaker)
+      current?.copy(isOnHold = !current.isOnHold)
     }
+  }
+
+  fun sendDtmfTone(char: Char) {
+    playDtmfTone(char)
+    TelecomCallManager.playDtmfTone(char)
+  }
+
+  fun stopDtmfTone() {
+    TelecomCallManager.stopDtmfTone()
   }
 
   fun toggleKeypad() {
     _callSession.update { current ->
       current?.copy(isKeypadOpen = !current.isKeypadOpen)
+    }
+  }
+
+  // Phase 4D: Second Call, Swap, Merge & Call Waiting
+  fun addSecondCall(number: String) {
+    if (number.isBlank()) return
+    TelecomCallManager.addSecondCall(getApplication(), number)
+  }
+
+  fun swapCalls() {
+    TelecomCallManager.swapCalls()
+    _callSession.update { current ->
+      if (current != null && current.heldCallName != null) {
+        val oldActiveName = current.callerName
+        val oldActiveNumber = current.phoneNumber
+        current.copy(
+          callerName = current.heldCallName,
+          phoneNumber = current.heldCallNumber ?: "",
+          heldCallName = oldActiveName,
+          heldCallNumber = oldActiveNumber,
+          isOnHold = false,
+        )
+      } else {
+        current
+      }
+    }
+  }
+
+  fun mergeCalls() {
+    TelecomCallManager.mergeCalls()
+    _callSession.update { current ->
+      current?.copy(
+        callerName = "Conference (${listOfNotNull(current.callerName, current.heldCallName).joinToString(", ")})",
+        isConference = true,
+        canMergeCalls = false,
+        canSwapCalls = false,
+        heldCallName = null,
+        heldCallNumber = null,
+      )
+    }
+  }
+
+  fun acceptWaitingCall(holdCurrent: Boolean = true) {
+    TelecomCallManager.acceptWaitingCall(holdCurrent)
+    _callSession.update { current ->
+      if (current?.hasWaitingCall == true) {
+        val waitName = current.waitingCallName ?: "Caller 2"
+        val waitNumber = current.waitingCallNumber ?: ""
+        if (holdCurrent) {
+          current.copy(
+            heldCallName = current.callerName,
+            heldCallNumber = current.phoneNumber,
+            callerName = waitName,
+            phoneNumber = waitNumber,
+            hasWaitingCall = false,
+            waitingCallName = null,
+            waitingCallNumber = null,
+            canSwapCalls = true,
+            canMergeCalls = true,
+          )
+        } else {
+          current.copy(
+            callerName = waitName,
+            phoneNumber = waitNumber,
+            hasWaitingCall = false,
+            waitingCallName = null,
+            waitingCallNumber = null,
+            heldCallName = null,
+            heldCallNumber = null,
+          )
+        }
+      } else {
+        current
+      }
+    }
+  }
+
+  fun rejectWaitingCall() {
+    TelecomCallManager.rejectWaitingCall()
+    _callSession.update { current ->
+      current?.copy(
+        hasWaitingCall = false,
+        waitingCallName = null,
+        waitingCallNumber = null,
+      )
+    }
+  }
+
+  fun simulateWaitingCall(name: String = "Sarah Connor", number: String = "+1 (555) 765-4321") {
+    _callSession.update { current ->
+      current?.copy(
+        waitingCallName = name,
+        waitingCallNumber = number,
+        hasWaitingCall = true,
+      )
     }
   }
 

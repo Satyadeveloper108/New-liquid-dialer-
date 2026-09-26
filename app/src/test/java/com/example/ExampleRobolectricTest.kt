@@ -193,4 +193,46 @@ class ExampleRobolectricTest {
     viewModel.endCall()
     assertNull(viewModel.callSession.value)
   }
+
+  @Test
+  fun `call states cover ringing dialing active holding and disconnected`() {
+    val viewModel = createViewModel()
+    viewModel.simulateIncomingCall(name = "Incoming Tester", number = "5551234")
+    assertEquals(CallState.RINGING, viewModel.callSession.value?.state)
+
+    viewModel.acceptCall()
+    assertEquals(CallState.ACTIVE, viewModel.callSession.value?.state)
+
+    viewModel.toggleHold()
+    assertEquals(true, viewModel.callSession.value?.isOnHold)
+
+    viewModel.endCall()
+    assertNull(viewModel.callSession.value)
+  }
+
+  @Test
+  fun `second call and call waiting state handling`() {
+    val viewModel = createViewModel()
+    viewModel.startCall(name = "Call 1", number = "111")
+    assertEquals(CallState.ACTIVE, viewModel.callSession.value?.state)
+
+    viewModel.simulateWaitingCall(name = "Call 2", number = "222")
+    assertEquals(true, viewModel.callSession.value?.hasWaitingCall)
+    assertEquals("Call 2", viewModel.callSession.value?.waitingCallName)
+
+    viewModel.acceptWaitingCall(holdCurrent = true)
+    assertEquals("Call 2", viewModel.callSession.value?.callerName)
+    assertEquals("Call 1", viewModel.callSession.value?.heldCallName)
+    assertEquals(true, viewModel.callSession.value?.canSwapCalls)
+
+    viewModel.swapCalls()
+    assertEquals("Call 1", viewModel.callSession.value?.callerName)
+    assertEquals("Call 2", viewModel.callSession.value?.heldCallName)
+
+    viewModel.mergeCalls()
+    assertEquals(true, viewModel.callSession.value?.isConference)
+
+    viewModel.endCall()
+    assertNull(viewModel.callSession.value)
+  }
 }

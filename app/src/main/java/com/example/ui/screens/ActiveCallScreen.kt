@@ -1,6 +1,11 @@
 package com.example.ui.screens
 
 import android.view.HapticFeedbackConstants
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,17 +23,24 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BluetoothAudio
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,26 +61,24 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.example.R
 import com.example.model.CallSession
+import com.example.model.CallState
 import com.example.ui.components.CallActionButton
 import com.example.ui.components.CallActionType
 import com.example.ui.components.KeypadButton
+import com.example.ui.theme.CallAcceptGreen
 import com.example.ui.theme.IosBlue
 import com.example.ui.theme.LocalIosColors
 
 /**
- * Active Call Screen with Liquid Glass controls and Theme Sync.
- * Layout:
- * - Upper Area: Minimize chevron, large caller name, and running call timer
- * - Center Grid: 3-column x 2-row fixed control order (slightly enlarged & shifted down):
- *     Row 1: Mute | Keypad | Speaker
- *     Row 2: Record Call | Add Call | Hold
- * - Bottom Area: Centered red circular End Call button
- * - Automatic System Theme Sync (Light / Dark mode adaptation)
+ * Active Call Screen with Liquid Glass controls, Multi-call / Second Call handling,
+ * Hold, Swap, Merge Conference, and Call Waiting.
  */
 @Composable
 fun ActiveCallScreen(
@@ -80,12 +90,18 @@ fun ActiveCallScreen(
   onMinimize: () -> Unit,
   modifier: Modifier = Modifier,
   onRecordCall: () -> Unit = {},
-  onAddCall: () -> Unit = {},
+  onAddCall: (String) -> Unit = {},
   onToggleHold: () -> Unit = {},
+  onDtmfTone: (Char) -> Unit = {},
+  onSwapCalls: () -> Unit = {},
+  onMergeCalls: () -> Unit = {},
+  onAcceptWaitingCall: (Boolean) -> Unit = {},
+  onRejectWaitingCall: () -> Unit = {},
 ) {
   val colors = LocalIosColors.current
   var isRecordingActive by remember { mutableStateOf(false) }
   var isHoldActive by remember { mutableStateOf(false) }
+  var showAddCallDialog by remember { mutableStateOf(false) }
 
   // Background adapts to system theme
   val bgGradient = remember(colors.isDark) {
@@ -109,10 +125,18 @@ fun ActiveCallScreen(
   }
 
   val headerTextColor = if (colors.isDark) Color.White else colors.textPrimary
-  val statusTextColor = if (isHoldActive) {
+  val isHoldEffective = isHoldActive || callSession.isOnHold || callSession.state.isHolding
+  val statusTextColor = if (isHoldEffective) {
     Color(0xFFFF9500)
   } else {
     if (colors.isDark) Color(0xFFAAAAAA) else colors.textSecondary
+  }
+
+  val statusText = when (callSession.state) {
+    CallState.DIALING -> "calling..."
+    CallState.HOLDING -> "on hold"
+    CallState.DISCONNECTED, CallState.ENDED -> "Call Ended"
+    else -> if (isHoldEffective && callSession.heldCallName == null) "on hold" else callSession.formattedDuration
   }
 
   Box(
@@ -137,7 +161,7 @@ fun ActiveCallScreen(
       )
     }
 
-    // 2. Upper Header: Caller Name & Duration
+    // 2. Upper Header: Caller Name, Held Call indicator, & Duration
     Column(
       modifier = Modifier
         .fillMaxWidth()
@@ -145,18 +169,46 @@ fun ActiveCallScreen(
         .padding(top = 40.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+      // Held Call pill (Tap to Swap calls)
+      if (callSession.heldCallName != null) {
+        Surface(
+          shape = CircleShape,
+          color = if (colors.isDark) Color(0x33FFFFFF) else Color(0x1F000000),
+          modifier = Modifier
+            .clickable { onSwapCalls() }
+            .padding(bottom = 8.dp)
+            .testTag("active_call_swap_pill"),
+        ) {
+          Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text(
+              text = "${callSession.heldCallName} (on hold) • swap",
+              color = Color(0xFFFF9500),
+              fontSize = 13.sp,
+              fontWeight = FontWeight.Medium,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+            )
+          }
+        }
+      }
+
       Text(
         text = callSession.callerName,
         color = headerTextColor,
         fontSize = 32.sp,
         fontWeight = FontWeight.SemiBold,
         textAlign = TextAlign.Center,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
       )
 
       Spacer(modifier = Modifier.height(8.dp))
 
       Text(
-        text = if (isHoldActive) "on hold" else callSession.formattedDuration,
+        text = statusText,
         color = statusTextColor,
         fontSize = 17.sp,
         fontWeight = FontWeight.Normal,
@@ -186,7 +238,9 @@ fun ActiveCallScreen(
                 digit = digit,
                 letters = letters,
                 size = 68.dp,
-                onDigitClick = { },
+                onDigitClick = {
+                  onDtmfTone(digit.first())
+                },
               )
             }
           }
@@ -201,8 +255,6 @@ fun ActiveCallScreen(
       }
     } else {
       // 3-Column x 2-Row Liquid Glass Control Grid
-      // Perfectly centered, with enlarged circular glass buttons (82.dp), expanded inter-row spacing (30.dp),
-      // downward offset (60.dp top offset), and balanced comfortable spacing to the End Call button.
       Column(
         modifier = Modifier
           .align(Alignment.Center)
@@ -236,16 +288,24 @@ fun ActiveCallScreen(
           )
 
           ActiveCallGlassButton(
-            icon = Icons.AutoMirrored.Filled.VolumeUp,
-            label = stringResource(id = R.string.call_speaker),
-            isActive = callSession.isSpeaker,
+            icon = when {
+              callSession.isBluetoothActive -> Icons.Filled.BluetoothAudio
+              callSession.isSpeaker -> Icons.AutoMirrored.Filled.VolumeUp
+              else -> Icons.AutoMirrored.Filled.VolumeUp
+            },
+            label = when {
+              callSession.isBluetoothActive -> "Bluetooth"
+              callSession.isSpeaker -> stringResource(id = R.string.call_speaker)
+              else -> callSession.audioEndpointName.ifBlank { stringResource(id = R.string.call_speaker) }
+            },
+            isActive = callSession.isSpeaker || callSession.isBluetoothActive,
             isDark = colors.isDark,
             onClick = onToggleSpeaker,
             testTag = "call_control_speaker",
           )
         }
 
-        // ROW 2: Record Call | Add Call | Hold
+        // ROW 2: Record Call | Add Call / Swap / Merge | Hold
         Row(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.SpaceEvenly,
@@ -263,22 +323,41 @@ fun ActiveCallScreen(
             testTag = "call_control_record",
           )
 
+          val addCallIcon = when {
+            callSession.canMergeCalls -> Icons.Filled.Call
+            callSession.canSwapCalls -> Icons.Filled.Call
+            else -> Icons.Filled.Add
+          }
+          val addCallLabel = when {
+            callSession.canMergeCalls -> "merge"
+            callSession.canSwapCalls -> "swap"
+            else -> stringResource(id = R.string.call_add_call)
+          }
+
           ActiveCallGlassButton(
-            icon = Icons.Filled.Add,
-            label = stringResource(id = R.string.call_add_call),
-            isActive = false,
+            icon = addCallIcon,
+            label = addCallLabel,
+            isActive = callSession.canMergeCalls || callSession.canSwapCalls,
             isDark = colors.isDark,
-            onClick = onAddCall,
+            onClick = {
+              if (callSession.canMergeCalls) {
+                onMergeCalls()
+              } else if (callSession.canSwapCalls) {
+                onSwapCalls()
+              } else {
+                showAddCallDialog = true
+              }
+            },
             testTag = "call_control_add_call",
           )
 
           ActiveCallGlassButton(
             icon = Icons.Filled.Pause,
             label = stringResource(id = R.string.call_hold),
-            isActive = isHoldActive,
+            isActive = isHoldEffective,
             isDark = colors.isDark,
             onClick = {
-              isHoldActive = !isHoldActive
+              isHoldActive = !isHoldEffective
               onToggleHold()
             },
             testTag = "call_control_hold",
@@ -300,19 +379,257 @@ fun ActiveCallScreen(
         testTag = "active_call_end",
       )
     }
+
+    // 5. Call Waiting Floating Banner Overlay (Phase 4D)
+    AnimatedVisibility(
+      visible = callSession.hasWaitingCall,
+      enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+      exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+      modifier = Modifier
+        .align(Alignment.TopCenter)
+        .fillMaxWidth()
+        .padding(top = 16.dp),
+    ) {
+      Surface(
+        shape = RoundedCornerShape(22.dp),
+        color = if (colors.isDark) Color(0xF21C1C1E) else Color(0xF2FFFFFF),
+        shadowElevation = 14.dp,
+        tonalElevation = 8.dp,
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 8.dp),
+      ) {
+        Column(
+          modifier = Modifier.padding(16.dp),
+          horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+          Text(
+            text = "Call Waiting",
+            color = if (colors.isDark) Color(0xFF8E8E93) else Color(0xFF6E6E73),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+          )
+          Spacer(modifier = Modifier.height(4.dp))
+          Text(
+            text = callSession.waitingCallName ?: "Incoming Call",
+            color = headerTextColor,
+            fontSize = 19.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+          )
+          if (!callSession.waitingCallNumber.isNullOrBlank()) {
+            Text(
+              text = callSession.waitingCallNumber,
+              color = statusTextColor,
+              fontSize = 14.sp,
+            )
+          }
+
+          Spacer(modifier = Modifier.height(14.dp))
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            TextButton(
+              onClick = onRejectWaitingCall,
+              colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFFF3B30)),
+            ) {
+              Text("Decline", fontWeight = FontWeight.SemiBold)
+            }
+
+            TextButton(
+              onClick = { onAcceptWaitingCall(false) },
+              colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFFF9500)),
+            ) {
+              Text("End & Accept", fontWeight = FontWeight.SemiBold)
+            }
+
+            Button(
+              onClick = { onAcceptWaitingCall(true) },
+              colors = ButtonDefaults.buttonColors(containerColor = CallAcceptGreen),
+              shape = CircleShape,
+            ) {
+              Text("Hold & Accept", color = Color.White, fontWeight = FontWeight.SemiBold)
+            }
+          }
+        }
+      }
+    }
+
+    // 6. In-Call Add Call Sheet / Dialog (Phase 4D)
+    if (showAddCallDialog) {
+      InCallAddCallDialog(
+        isDark = colors.isDark,
+        onDismiss = { showAddCallDialog = false },
+        onCall = { number ->
+          showAddCallDialog = false
+          onAddCall(number)
+        },
+      )
+    }
+  }
+}
+
+/**
+ * Clean Liquid Glass modal dialog to enter or dial a number for a second real cellular call.
+ */
+@Composable
+private fun InCallAddCallDialog(
+  isDark: Boolean,
+  onDismiss: () -> Unit,
+  onCall: (String) -> Unit,
+) {
+  var dialedNumber by remember { mutableStateOf("") }
+  val textColor = if (isDark) Color.White else Color(0xFF15161A)
+
+  Dialog(onDismissRequest = onDismiss) {
+    Surface(
+      shape = RoundedCornerShape(24.dp),
+      color = if (isDark) Color(0xF21C1C1E) else Color(0xF2F2F2F7),
+      shadowElevation = 16.dp,
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 4.dp),
+    ) {
+      Column(
+        modifier = Modifier.padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+      ) {
+        Text(
+          text = "Add Call",
+          color = textColor,
+          fontSize = 19.sp,
+          fontWeight = FontWeight.SemiBold,
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Display entered number with Backspace
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (isDark) Color(0x33FFFFFF) else Color(0x1F000000))
+            .padding(horizontal = 14.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+          Text(
+            text = dialedNumber.ifEmpty { "Enter phone number" },
+            color = if (dialedNumber.isEmpty()) Color(0xFF8E8E93) else textColor,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+          )
+
+          if (dialedNumber.isNotEmpty()) {
+            IconButton(
+              onClick = { dialedNumber = dialedNumber.dropLast(1) },
+              modifier = Modifier.size(36.dp),
+            ) {
+              Icon(
+                imageVector = Icons.AutoMirrored.Filled.Backspace,
+                contentDescription = "Backspace",
+                tint = if (isDark) Color(0xFFAAAAAA) else Color(0xFF666666),
+                modifier = Modifier.size(20.dp),
+              )
+            }
+          }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Compact Keypad
+        val keys = listOf(
+          listOf("1", "2", "3"),
+          listOf("4", "5", "6"),
+          listOf("7", "8", "9"),
+          listOf("*", "0", "#"),
+        )
+
+        keys.forEach { row ->
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+          ) {
+            row.forEach { digit ->
+              Box(
+                modifier = Modifier
+                  .size(54.dp)
+                  .clip(CircleShape)
+                  .background(if (isDark) Color(0x28FFFFFF) else Color(0x18000000))
+                  .clickable { dialedNumber += digit },
+                contentAlignment = Alignment.Center,
+              ) {
+                Text(
+                  text = digit,
+                  color = textColor,
+                  fontSize = 20.sp,
+                  fontWeight = FontWeight.Medium,
+                )
+              }
+            }
+          }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Action Buttons: Cancel & Call
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          TextButton(
+            onClick = onDismiss,
+            modifier = Modifier.weight(1f),
+          ) {
+            Text("Cancel", color = IosBlue, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+          }
+
+          Spacer(modifier = Modifier.width(12.dp))
+
+          Button(
+            onClick = {
+              if (dialedNumber.isNotBlank()) {
+                onCall(dialedNumber)
+              }
+            },
+            enabled = dialedNumber.isNotBlank(),
+            colors = ButtonDefaults.buttonColors(
+              containerColor = CallAcceptGreen,
+              disabledContainerColor = Color(0x4034C759),
+            ),
+            shape = CircleShape,
+            modifier = Modifier.weight(1f),
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Icon(
+                imageVector = Icons.Filled.Call,
+                contentDescription = "Call",
+                tint = Color.White,
+                modifier = Modifier.size(18.dp),
+              )
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("Call", color = Color.White, fontWeight = FontWeight.SemiBold)
+            }
+          }
+        }
+      }
+    }
   }
 }
 
 /**
  * Reusable Liquid Glass Circular Control Button for In-Call UI.
- * Features:
- * - Enlarged by ~9.7% (79.dp) with centered white/dark icon and crisp label
- * - Automatic System Theme Sync:
- *   - Dark Mode: Translucent charcoal glass gradient with soft ambient depth & white icons
- *   - Light Mode: Translucent smoky Liquid Glass gradient with soft diffused depth & dark icons
- * - Hairline light-catching specular rim (0.75.dp)
- * - Inner specular highlight sheen
- * - Distinct elevated active state
  */
 @Composable
 private fun ActiveCallGlassButton(
@@ -329,7 +646,6 @@ private fun ActiveCallGlassButton(
   val view = LocalView.current
   val interactionSource = remember { MutableInteractionSource() }
 
-  // Surface brush based on theme and active state
   val surfaceBrush = if (isDark) {
     if (isActive) {
       Brush.verticalGradient(
@@ -347,7 +663,6 @@ private fun ActiveCallGlassButton(
       )
     }
   } else {
-    // Light Mode Liquid Glass
     if (isActive) {
       Brush.verticalGradient(
         colors = listOf(
@@ -365,7 +680,6 @@ private fun ActiveCallGlassButton(
     }
   }
 
-  // Border brush based on theme and active state
   val borderBrush = if (isDark) {
     if (isActive) {
       Brush.verticalGradient(
@@ -383,7 +697,6 @@ private fun ActiveCallGlassButton(
       )
     }
   } else {
-    // Light Mode border
     if (isActive) {
       Brush.verticalGradient(
         colors = listOf(
@@ -453,7 +766,6 @@ private fun ActiveCallGlassButton(
         ),
       contentAlignment = Alignment.Center,
     ) {
-      // Subtle inner top-left specular highlight sheen in inactive glass
       if (!isActive) {
         val highlightColor = if (isDark) Color(0x28FFFFFF) else Color(0x50FFFFFF)
         Box(

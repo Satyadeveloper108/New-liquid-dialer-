@@ -25,48 +25,50 @@ class MainActivity : ComponentActivity() {
 
   private val dialerViewModel: DialerViewModel by viewModels()
 
-  // System role launcher for Default Dialer if required by Android for call log
+  // Track if default dialer prompt was already presented this launch session
+  private var hasPromptedRoleThisLaunch = false
+
+  // Step 1: Default Dialer Role Request Launcher
   private val roleRequestLauncher = registerForActivityResult(
     ActivityResultContracts.StartActivityForResult(),
   ) { _ ->
-    val hasCallLog = dialerViewModel.checkCallLogPermission(this)
-    dialerViewModel.onCallLogPermissionResult(hasCallLog)
+    // After user accepts or declines, refresh permissions and proceed to Contacts flow
+    dialerViewModel.refreshPermissions(this)
+    requestContactsPermissionFlow()
   }
 
-  // Runtime permissions launcher for startup permissions: READ_CONTACTS & READ_CALL_LOG
-  private val startupPermissionsLauncher = registerForActivityResult(
+  // Step 2: Contacts Permission Launcher
+  private val contactsPermissionLauncher = registerForActivityResult(
+    ActivityResultContracts.RequestPermission(),
+  ) { isGranted ->
+    dialerViewModel.onContactsPermissionResult(isGranted)
+    // After contacts permission is accepted or declined, proceed to Call Log flow
+    requestCallLogPermissionFlow()
+  }
+
+  // Step 3: Call Log & Phone Permissions Launcher
+  private val callLogPermissionLauncher = registerForActivityResult(
     ActivityResultContracts.RequestMultiplePermissions(),
   ) { permissions ->
-    val contactsGranted = permissions[Manifest.permission.READ_CONTACTS]
-      ?: (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED)
-
     val callLogGranted = permissions[Manifest.permission.READ_CALL_LOG]
-      ?: (dialerViewModel.checkCallLogPermission(this))
-
-    dialerViewModel.onStartupPermissionsResult(
-      contactsGranted = contactsGranted,
-      callLogGranted = callLogGranted,
-    )
-
-    // If call log permission was not granted directly, check if system requires default dialer role
-    if (!callLogGranted) {
-      requestDefaultDialerRoleIfNeeded()
-    }
+      ?: dialerViewModel.checkCallLogPermission(this)
+    dialerViewModel.onCallLogPermissionResult(callLogGranted)
+    dialerViewModel.refreshPermissions(this)
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
 
-    // Automatically request READ_CONTACTS and READ_CALL_LOG at startup
-    requestStartupPermissions()
+    // Run first-launch permission and setup flow in strict sequential order
+    startFirstLaunchSetupFlow()
 
     setContent {
       PhoneTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
           DialerApp(
             viewModel = dialerViewModel,
-            onRequestDefaultDialer = { requestDefaultDialerRoleIfNeeded() },
+            onRequestDefaultDialer = { requestDefaultDialerRole(force = true) },
           )
         }
       }
@@ -78,40 +80,103 @@ class MainActivity : ComponentActivity() {
     dialerViewModel.refreshPermissions(this)
   }
 
-  private fun requestStartupPermissions() {
-    val needsContacts = ContextCompat.checkSelfPermission(
-      this,
-      Manifest.permission.READ_CONTACTS,
-    ) != PackageManager.PERMISSION_GRANTED
-
-    val needsCallLog = !dialerViewModel.checkCallLogPermission(this)
-
-    if (needsContacts || needsCallLog) {
-      val permsToRequest = mutableListOf<String>()
-      if (needsContacts) permsToRequest.add(Manifest.permission.READ_CONTACTS)
-      if (needsCallLog) permsToRequest.add(Manifest.permission.READ_CALL_LOG)
-      startupPermissionsLauncher.launch(permsToRequest.toTypedArray())
+  /**
+   * Orchestrates the startup permission & default dialer sequence:
+   * 1. Check if app already holds RoleManager.ROLE_DIALER.
+   * 2. If not, immediately launch the official Android Default Phone/Dialer role request.
+   * 3. After accept/decline (or if already held), continue to required Contacts permission flow.
+   * 4. Then request READ_CALL_LOG when Android allows it.
+   */
+  private fun startFirstLaunchSetupFlow() {
+    if (!isDefaultDialer() && !hasPromptedRoleThisLaunch) {
+      hasPromptedRoleThisLaunch = true
+      requestDefaultDialerRole(force = false)
     } else {
-      dialerViewModel.refreshPermissions(this)
+      // Already default dialer or already prompted this launch -> proceed directly to permissions
+      requestContactsPermissionFlow()
     }
   }
 
-  fun requestDefaultDialerRoleIfNeeded() {
+  private fun isDefaultDialer(): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      val roleManager = getSystemService(RoleManager::class.java)
+      roleManager != null && roleManager.isRoleHeld(RoleManager.ROLE_DIALER)
+    } else {
+      val telecomManager = getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+      telecomManager?.defaultDialerPackage == packageName
+    }
+  }
+
+  private fun requestDefaultDialerRole(force: Boolean) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
       val roleManager = getSystemService(RoleManager::class.java)
-      if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_DIALER) && !roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) {
-        val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER)
-        roleRequestLauncher.launch(intent)
-        return
+      if (roleManager != null && roleManager.isRoleAvailable(RoleManager.ROLE_DIALER)) {
+        if (force || !roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) {
+          val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER)
+          roleRequestLauncher.launch(intent)
+          return
+        }
       }
     } else {
       val telecomManager = getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
-      if (telecomManager != null && telecomManager.defaultDialerPackage != packageName) {
-        val intent = Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
-          .putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName)
-        roleRequestLauncher.launch(intent)
-        return
+      if (telecomManager != null) {
+        if (force || telecomManager.defaultDialerPackage != packageName) {
+          val intent = Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
+            .putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName)
+          roleRequestLauncher.launch(intent)
+          return
+        }
       }
+    }
+
+    // If role request couldn't be launched or is already held, continue flow
+    requestContactsPermissionFlow()
+  }
+
+  private fun requestContactsPermissionFlow() {
+    val hasContacts = ContextCompat.checkSelfPermission(
+      this,
+      Manifest.permission.READ_CONTACTS,
+    ) == PackageManager.PERMISSION_GRANTED
+
+    if (!hasContacts) {
+      contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+    } else {
+      dialerViewModel.onContactsPermissionResult(true)
+      requestCallLogPermissionFlow()
+    }
+  }
+
+  private fun requestCallLogPermissionFlow() {
+    val needsCallLog = !dialerViewModel.checkCallLogPermission(this)
+    val needsCallPhone = ContextCompat.checkSelfPermission(
+      this,
+      Manifest.permission.CALL_PHONE,
+    ) != PackageManager.PERMISSION_GRANTED
+    val needsBluetooth = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      ContextCompat.checkSelfPermission(
+        this,
+        Manifest.permission.BLUETOOTH_CONNECT,
+      ) != PackageManager.PERMISSION_GRANTED
+    } else {
+      false
+    }
+
+    val permsToRequest = mutableListOf<String>()
+    if (needsCallLog) {
+      permsToRequest.add(Manifest.permission.READ_CALL_LOG)
+    }
+    if (needsCallPhone) {
+      permsToRequest.add(Manifest.permission.CALL_PHONE)
+    }
+    if (needsBluetooth && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      permsToRequest.add(Manifest.permission.BLUETOOTH_CONNECT)
+    }
+
+    if (permsToRequest.isNotEmpty()) {
+      callLogPermissionLauncher.launch(permsToRequest.toTypedArray())
+    } else {
+      dialerViewModel.refreshPermissions(this)
     }
   }
 }

@@ -121,7 +121,7 @@ fun DialerApp(
               FavouritesScreen(
                 favourites = favourites,
                 onContactClick = { contact ->
-                  viewModel.startCall(contact.name, contact.phoneNumber)
+                  viewModel.startOutgoingCall(contact.name, contact.phoneNumber)
                 },
                 onAddFavouriteClick = {
                   viewModel.selectTab(NavTab.CONTACTS)
@@ -140,7 +140,7 @@ fun DialerApp(
                 onRequestDefaultDialer = onRequestDefaultDialer,
                 onFilterSelected = { viewModel.setRecentsFilter(it) },
                 onCallRecordClick = { record ->
-                  viewModel.startCall(record.contactName, record.phoneNumber)
+                  viewModel.startOutgoingCall(record.contactName, record.phoneNumber)
                 },
                 onDeleteRecord = { id ->
                   viewModel.removeRecent(id)
@@ -160,7 +160,7 @@ fun DialerApp(
                 isLoadingContacts = isLoadingContacts,
                 onSearchQueryChange = { viewModel.setContactsSearchQuery(it) },
                 onContactClick = { contact ->
-                  viewModel.startCall(contact.name, contact.phoneNumber)
+                  viewModel.startOutgoingCall(contact.name, contact.phoneNumber)
                 },
                 onSaveNewContact = { name, phone, type ->
                   viewModel.saveNewContact(name, phone, type)
@@ -188,7 +188,7 @@ fun DialerApp(
                 onDeleteDigit = { viewModel.deleteDigit() },
                 onClearDigits = { viewModel.clearDigits() },
                 onSetDialedNumber = { viewModel.setDialedNumber(it) },
-                onStartCall = { number -> viewModel.startCall(number = number) },
+                onStartCall = { number -> viewModel.startOutgoingCall(number = number) },
                 onAddNumberToContact = { number ->
                   prefilledAddContactNumber = number
                 },
@@ -208,17 +208,19 @@ fun DialerApp(
       }
     }
 
-    // Mini Persistent Call Banner (Visible when active call is minimized)
+    // Mini Persistent Call Banner (Visible when active, dialing, or holding call is minimized)
     MiniCallBanner(
       callSession = callSession,
-      visible = isCallMinimized && callSession?.state == CallState.ACTIVE,
+      visible = isCallMinimized && (callSession?.state?.isActive == true ||
+                                    callSession?.state?.isDialing == true ||
+                                    callSession?.state?.isHolding == true),
       onRestoreCall = { viewModel.restoreCall() },
       onEndCall = { viewModel.endCall() },
     )
 
-    // Incoming Call Full-Screen Overlay
+    // Incoming Call Full-Screen Overlay (RINGING state)
     AnimatedVisibility(
-      visible = callSession?.state == CallState.INCOMING,
+      visible = callSession?.state?.isRinging == true,
       enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
       exit = fadeOut(),
     ) {
@@ -231,9 +233,12 @@ fun DialerApp(
       }
     }
 
-    // Active Call Full-Screen Overlay (when not minimized)
+    // Active & Outgoing Call Full-Screen Overlay (DIALING, ACTIVE, HOLDING, DISCONNECTED when not minimized)
     AnimatedVisibility(
-      visible = callSession?.state == CallState.ACTIVE && !isCallMinimized,
+      visible = (callSession?.state?.isActive == true ||
+                 callSession?.state?.isDialing == true ||
+                 callSession?.state?.isHolding == true ||
+                 callSession?.state?.isDisconnected == true) && !isCallMinimized,
       enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
       exit = fadeOut(),
     ) {
@@ -245,6 +250,13 @@ fun DialerApp(
           onToggleSpeaker = { viewModel.toggleSpeaker() },
           onToggleKeypad = { viewModel.toggleKeypad() },
           onMinimize = { viewModel.minimizeCall() },
+          onToggleHold = { viewModel.toggleHold() },
+          onDtmfTone = { char -> viewModel.sendDtmfTone(char) },
+          onAddCall = { number -> viewModel.addSecondCall(number) },
+          onSwapCalls = { viewModel.swapCalls() },
+          onMergeCalls = { viewModel.mergeCalls() },
+          onAcceptWaitingCall = { holdCurrent -> viewModel.acceptWaitingCall(holdCurrent) },
+          onRejectWaitingCall = { viewModel.rejectWaitingCall() },
         )
       }
     }
