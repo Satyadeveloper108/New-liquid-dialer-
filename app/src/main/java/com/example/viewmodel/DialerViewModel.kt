@@ -7,6 +7,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.CallerNameResolver
 import com.example.data.ContactsRepository
 import com.example.data.SampleDataProvider
 import com.example.model.CallRecord
@@ -198,6 +199,7 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
       _isLoadingContacts.value = true
       try {
         val deviceList = repository.getDeviceContacts(context)
+        CallerNameResolver.clearCache()
         if (deviceList.isNotEmpty()) {
           _contacts.value = deviceList
           _isRealDeviceContacts.value = true
@@ -600,11 +602,19 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
     }
   }
 
-  private fun findContactName(number: String): String? {
-    val cleanNum = number.replace("[^0-9+]".toRegex(), "")
-    return _contacts.value.firstOrNull {
-      it.phoneNumber.replace("[^0-9+]".toRegex(), "") == cleanNum
-    }?.name
+  fun findContactName(number: String): String? {
+    val context = getApplication<Application>()
+    val resolved = CallerNameResolver.resolveCallerName(
+      context = context,
+      phoneNumber = number,
+      telecomCallerName = null,
+      inMemoryContacts = _contacts.value,
+    )
+    return if (resolved.isNotBlank() && resolved != number && resolved != "Unknown") {
+      resolved
+    } else {
+      null
+    }
   }
 
   fun formatDialerNumber(raw: String): String {

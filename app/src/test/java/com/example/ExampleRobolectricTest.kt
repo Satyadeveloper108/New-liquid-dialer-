@@ -4,7 +4,9 @@ import android.content.Context
 import android.media.ToneGenerator
 import androidx.test.core.app.ApplicationProvider
 import com.example.audio.DtmfPlayer
+import com.example.data.CallerNameResolver
 import com.example.model.CallState
+import com.example.model.Contact
 import com.example.model.NavTab
 import com.example.viewmodel.DialerViewModel
 import org.junit.Assert.assertEquals
@@ -234,5 +236,101 @@ class ExampleRobolectricTest {
 
     viewModel.endCall()
     assertNull(viewModel.callSession.value)
+  }
+
+  @Test
+  fun `local saved contact name takes priority over carrier caller id name`() {
+    CallerNameResolver.clearCache()
+    val savedContacts = listOf(
+      Contact(
+        id = "c_1",
+        name = "Anil Kumar Jena",
+        phoneNumber = "+919876543210",
+        type = "mobile",
+        avatarColorIndex = 0,
+        isFavorite = false,
+      ),
+    )
+
+    // Real cellular call comes in with carrier caller-ID name
+    val resolved = CallerNameResolver.resolveCallerName(
+      context = null,
+      phoneNumber = "+919876543210",
+      telecomCallerName = "Airtel / Unknown Caller",
+      inMemoryContacts = savedContacts,
+    )
+
+    // Must prioritize locally saved contact name "Anil Kumar Jena"
+    assertEquals("Anil Kumar Jena", resolved)
+  }
+
+  @Test
+  fun `normalized phone-number matching handles all national and international variants`() {
+    CallerNameResolver.clearCache()
+    val savedContacts = listOf(
+      Contact(
+        id = "c_1",
+        name = "Anil Kumar Jena",
+        phoneNumber = "+919876543210",
+        type = "mobile",
+        avatarColorIndex = 0,
+        isFavorite = false,
+      ),
+    )
+
+    // Check all required formats:
+    // +91XXXXXXXXXX, 91XXXXXXXXXX, 0XXXXXXXXXX, XXXXXXXXXX, with spaces and hyphens
+    val testVariants = listOf(
+      "+919876543210",
+      "919876543210",
+      "09876543210",
+      "9876543210",
+      "+91 98765-43210",
+      "0 98765 43210",
+      "(98765) 43210",
+    )
+
+    for (variant in testVariants) {
+      val resolved = CallerNameResolver.resolveCallerName(
+        context = null,
+        phoneNumber = variant,
+        telecomCallerName = "Telecom Carrier Name",
+        inMemoryContacts = savedContacts,
+      )
+      assertEquals("Failed for variant: $variant", "Anil Kumar Jena", resolved)
+    }
+  }
+
+  @Test
+  fun `carrier caller id and raw number fallbacks when number is unsaved`() {
+    CallerNameResolver.clearCache()
+    val savedContacts = listOf(
+      Contact(
+        id = "c_1",
+        name = "Anil Kumar Jena",
+        phoneNumber = "+919876543210",
+        type = "mobile",
+        avatarColorIndex = 0,
+        isFavorite = false,
+      ),
+    )
+
+    // 1. Unsaved number with Telecom caller ID -> Telecom caller ID
+    val withTelecomName = CallerNameResolver.resolveCallerName(
+      context = null,
+      phoneNumber = "+919999988888",
+      telecomCallerName = "Bank Helpline",
+      inMemoryContacts = savedContacts,
+    )
+    assertEquals("Bank Helpline", withTelecomName)
+
+    // 2. Unsaved number without Telecom caller ID -> Raw phone number
+    val rawFallback = CallerNameResolver.resolveCallerName(
+      context = null,
+      phoneNumber = "+919999988888",
+      telecomCallerName = null,
+      inMemoryContacts = savedContacts,
+    )
+    assertEquals("+919999988888", rawFallback)
   }
 }

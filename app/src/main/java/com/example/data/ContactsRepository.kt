@@ -180,10 +180,16 @@ class ContactsRepository {
             else -> CallType.INCOMING
           }
 
+          val resolvedName = CallerNameResolver.resolveCallerName(
+            context = context,
+            phoneNumber = number,
+            telecomCallerName = name,
+          )
+
           callLogs.add(
             CallRecord(
               id = id.ifBlank { dateMillis.toString() },
-              contactName = if (!name.isNullOrBlank()) name else number,
+              contactName = resolvedName,
               phoneNumber = number,
               callType = callType,
               timeFormatted = timeStr,

@@ -17,6 +17,7 @@ import android.telecom.TelecomManager
 import android.telecom.VideoProfile
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
+import com.example.data.CallerNameResolver
 import com.example.model.CallSession
 import com.example.model.CallState
 import kotlinx.coroutines.CoroutineScope
@@ -125,6 +126,17 @@ object TelecomCallManager {
     }
 
     refreshMultiCallSessionState()
+
+    // Resolve caller name in background if needed to ensure local saved contact name takes priority
+    scope.launch(Dispatchers.IO) {
+      val num = extractPhoneNumber(call)
+      if (num.isNotBlank()) {
+        val resolved = CallerNameResolver.resolveCallerName(service, num, null)
+        if (resolved.isNotBlank() && resolved != num && resolved != "Unknown") {
+          refreshMultiCallSessionState()
+        }
+      }
+    }
   }
 
   fun onCallRemoved(call: Call) {
@@ -306,13 +318,37 @@ object TelecomCallManager {
   }
 
   private fun extractPhoneNumber(call: Call): String {
-    return call.details?.handle?.schemeSpecificPart ?: ""
+    val handle = call.details?.handle?.schemeSpecificPart
+    if (!handle.isNullOrBlank()) return handle
+
+    val gateway = call.details?.gatewayInfo?.originalAddress?.schemeSpecificPart
+    if (!gateway.isNullOrBlank()) return gateway
+
+    val extrasNumber = call.details?.extras?.getString(TelecomManager.EXTRA_INCOMING_CALL_EXTRAS)
+      ?: call.details?.intentExtras?.getString("android.telephony.extra.INCOMING_NUMBER")
+    if (!extrasNumber.isNullOrBlank()) return extrasNumber
+
+    return ""
   }
 
   private fun extractCallerName(call: Call, phoneNumber: String): String {
-    return call.details?.callerDisplayName?.takeIf { it.isNotBlank() }
-      ?: contactNameLookup?.invoke(phoneNumber)
-      ?: phoneNumber.ifBlank { "Unknown" }
+    val telecomCallerName = call.details?.callerDisplayName?.takeIf { it.isNotBlank() }
+
+    // Priority 1 & 2: Local Device Contacts lookup (exact or normalized match)
+    val resolvedLocal = contactNameLookup?.invoke(phoneNumber)
+      ?: inCallService?.let { CallerNameResolver.resolveCallerName(it, phoneNumber, null) }
+
+    if (!resolvedLocal.isNullOrBlank() && resolvedLocal != phoneNumber && resolvedLocal != "Unknown") {
+      return resolvedLocal
+    }
+
+    // Priority 3: Telecom-provided contact/caller-ID name
+    if (!telecomCallerName.isNullOrBlank() && telecomCallerName != phoneNumber && telecomCallerName != "Unknown") {
+      return telecomCallerName
+    }
+
+    // Priority 4: Raw phone number as final fallback
+    return phoneNumber.ifBlank { "Unknown" }
   }
 
   private fun startDurationTimer() {
