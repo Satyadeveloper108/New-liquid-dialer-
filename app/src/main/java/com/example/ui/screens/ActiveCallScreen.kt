@@ -88,22 +88,24 @@ fun ActiveCallScreen(
   var isHoldActive by remember { mutableStateOf(false) }
 
   // Background adapts to system theme
-  val bgGradient = if (colors.isDark) {
-    Brush.verticalGradient(
-      colors = listOf(
-        Color(0xFF1C1D24),
-        Color(0xFF0F1014),
-        Color(0xFF000000),
-      ),
-    )
-  } else {
-    Brush.verticalGradient(
-      colors = listOf(
-        Color(0xFFFFFFFF),
-        Color(0xFFF7F8FA),
-        Color(0xFFECEEF3),
-      ),
-    )
+  val bgGradient = remember(colors.isDark) {
+    if (colors.isDark) {
+      Brush.verticalGradient(
+        colors = listOf(
+          Color(0xFF1C1D24),
+          Color(0xFF0F1014),
+          Color(0xFF000000),
+        ),
+      )
+    } else {
+      Brush.verticalGradient(
+        colors = listOf(
+          Color(0xFFFFFFFF),
+          Color(0xFFF7F8FA),
+          Color(0xFFECEEF3),
+        ),
+      )
+    }
   }
 
   val headerTextColor = if (colors.isDark) Color.White else colors.textPrimary

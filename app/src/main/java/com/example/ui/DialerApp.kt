@@ -2,8 +2,14 @@ package com.example.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -87,7 +93,27 @@ fun DialerApp(
       ) {
         AnimatedContent(
           targetState = activeTab,
-          transitionSpec = { fadeIn() togetherWith fadeOut() },
+          transitionSpec = {
+            if (targetState.ordinal > initialState.ordinal) {
+              (slideInHorizontally(
+                animationSpec = tween(280, easing = FastOutSlowInEasing),
+                initialOffsetX = { fullWidth -> fullWidth },
+              ) + fadeIn(animationSpec = tween(200))) togetherWith
+                (slideOutHorizontally(
+                  animationSpec = tween(280, easing = FastOutSlowInEasing),
+                  targetOffsetX = { fullWidth -> -fullWidth },
+                ) + fadeOut(animationSpec = tween(150)))
+            } else {
+              (slideInHorizontally(
+                animationSpec = tween(280, easing = FastOutSlowInEasing),
+                initialOffsetX = { fullWidth -> -fullWidth },
+              ) + fadeIn(animationSpec = tween(200))) togetherWith
+                (slideOutHorizontally(
+                  animationSpec = tween(280, easing = FastOutSlowInEasing),
+                  targetOffsetX = { fullWidth -> fullWidth },
+                ) + fadeOut(animationSpec = tween(150)))
+            }
+          },
           label = "tab_switch_transition",
         ) { targetTab ->
           when (targetTab) {
@@ -191,24 +217,36 @@ fun DialerApp(
     )
 
     // Incoming Call Full-Screen Overlay
-    if (callSession?.state == CallState.INCOMING) {
-      IncomingCallScreen(
-        callSession = callSession!!,
-        onAccept = { viewModel.acceptCall() },
-        onDecline = { viewModel.declineCall() },
-      )
+    AnimatedVisibility(
+      visible = callSession?.state == CallState.INCOMING,
+      enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+      exit = fadeOut(),
+    ) {
+      callSession?.let { session ->
+        IncomingCallScreen(
+          callSession = session,
+          onAccept = { viewModel.acceptCall() },
+          onDecline = { viewModel.declineCall() },
+        )
+      }
     }
 
     // Active Call Full-Screen Overlay (when not minimized)
-    if (callSession?.state == CallState.ACTIVE && !isCallMinimized) {
-      ActiveCallScreen(
-        callSession = callSession!!,
-        onEndCall = { viewModel.endCall() },
-        onToggleMute = { viewModel.toggleMute() },
-        onToggleSpeaker = { viewModel.toggleSpeaker() },
-        onToggleKeypad = { viewModel.toggleKeypad() },
-        onMinimize = { viewModel.minimizeCall() },
-      )
+    AnimatedVisibility(
+      visible = callSession?.state == CallState.ACTIVE && !isCallMinimized,
+      enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+      exit = fadeOut(),
+    ) {
+      callSession?.let { session ->
+        ActiveCallScreen(
+          callSession = session,
+          onEndCall = { viewModel.endCall() },
+          onToggleMute = { viewModel.toggleMute() },
+          onToggleSpeaker = { viewModel.toggleSpeaker() },
+          onToggleKeypad = { viewModel.toggleKeypad() },
+          onMinimize = { viewModel.minimizeCall() },
+        )
+      }
     }
 
     // Add Contact Dialog from Keypad "Add Number"
