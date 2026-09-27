@@ -42,9 +42,24 @@ jobs:
             gradle assembleDebug --stacktrace
           fi
 
+      - name: Build PerfTest APK with Gradle
+        run: |
+          if [ -f "./gradlew" ]; then
+            ./gradlew assemblePerfTest --stacktrace
+          else
+            gradle assemblePerfTest --stacktrace
+          fi
+
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
           name: phone-dialer-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+          retention-days: 14
+
+      - name: Upload PerfTest APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: phone-dialer-perftest-apk
+          path: app/build/outputs/apk/perfTest/*.apk
           retention-days: 14

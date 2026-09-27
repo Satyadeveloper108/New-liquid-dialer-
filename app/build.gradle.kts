@@ -39,6 +39,19 @@ android {
     debug {
       signingConfig = signingConfigs.getByName("debug")
     }
+    create("perfTest") {
+      initWith(getByName("debug"))
+      isDebuggable = false
+      isMinifyEnabled = true
+      isShrinkResources = true
+      proguardFiles(
+        getDefaultProguardFile("proguard-android-optimize.txt"),
+        "proguard-rules.pro"
+      )
+      matchingFallbacks += listOf("debug")
+      signingConfig = signingConfigs.getByName("debug")
+      applicationIdSuffix = ".perftest"
+    }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
