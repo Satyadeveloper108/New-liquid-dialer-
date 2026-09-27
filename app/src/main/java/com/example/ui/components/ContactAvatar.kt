@@ -17,10 +17,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import coil.compose.AsyncImage
+import coil.request.CachePolicy
 import coil.request.ImageRequest
+import coil.size.Precision
+import coil.size.Scale
 
 private val AvatarGradients = listOf(
   listOf(Color(0xFF8E8E93), Color(0xFF636366)),
@@ -46,12 +49,19 @@ fun ContactAvatar(
 ) {
   if (!photoUri.isNullOrBlank()) {
     val context = LocalContext.current
-    val imageRequest = remember(photoUri, context) {
+    val density = LocalDensity.current
+    val sizePx = remember(size, density) {
+      with(density) { size.roundToPx() }
+    }
+    val imageRequest = remember(photoUri, sizePx, context) {
       ImageRequest.Builder(context)
         .data(photoUri)
+        .size(sizePx, sizePx)
+        .scale(Scale.FILL)
+        .precision(Precision.INEXACT)
         .crossfade(false)
-        .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
-        .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+        .memoryCachePolicy(CachePolicy.ENABLED)
+        .diskCachePolicy(CachePolicy.ENABLED)
         .build()
     }
     AsyncImage(

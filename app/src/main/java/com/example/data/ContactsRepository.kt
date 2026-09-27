@@ -180,11 +180,11 @@ class ContactsRepository {
             else -> CallType.INCOMING
           }
 
-          val resolvedName = CallerNameResolver.resolveCallerName(
-            context = context,
-            phoneNumber = number,
-            telecomCallerName = name,
-          )
+          val resolvedName = if (!name.isNullOrBlank() && name != "Unknown") {
+            name.trim()
+          } else {
+            CallerNameResolver.fastResolve(number) ?: number
+          }
 
           callLogs.add(
             CallRecord(

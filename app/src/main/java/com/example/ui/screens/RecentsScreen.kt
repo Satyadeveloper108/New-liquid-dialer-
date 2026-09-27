@@ -290,11 +290,7 @@ private fun RecentCallRow(
       verticalAlignment = Alignment.CenterVertically,
     ) {
       // Delete action in edit mode
-      AnimatedVisibility(
-        visible = isEditMode,
-        enter = fadeIn(),
-        exit = fadeOut(),
-      ) {
+      if (isEditMode) {
         IconButton(
           onClick = handleDeleteClick,
           modifier = Modifier

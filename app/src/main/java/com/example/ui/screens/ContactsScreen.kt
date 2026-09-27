@@ -4,6 +4,8 @@ import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -54,6 +56,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -584,8 +588,34 @@ private fun AlphabetScrubber(
   onLetterClick: (Char) -> Unit,
   modifier: Modifier = Modifier,
 ) {
+  var totalHeightPx by remember { mutableStateOf(1f) }
+
   Column(
-    modifier = modifier,
+    modifier = modifier
+      .onGloballyPositioned { coordinates ->
+        if (coordinates.size.height > 0) {
+          totalHeightPx = coordinates.size.height.toFloat()
+        }
+      }
+      .pointerInput(Unit) {
+        detectDragGestures(
+          onDragStart = { offset ->
+            val index = ((offset.y / totalHeightPx) * AlphabetList.size).toInt().coerceIn(0, AlphabetList.lastIndex)
+            onLetterClick(AlphabetList[index])
+          },
+          onDrag = { change, _ ->
+            change.consume()
+            val index = ((change.position.y / totalHeightPx) * AlphabetList.size).toInt().coerceIn(0, AlphabetList.lastIndex)
+            onLetterClick(AlphabetList[index])
+          },
+        )
+      }
+      .pointerInput(Unit) {
+        detectTapGestures { offset ->
+          val index = ((offset.y / totalHeightPx) * AlphabetList.size).toInt().coerceIn(0, AlphabetList.lastIndex)
+          onLetterClick(AlphabetList[index])
+        }
+      },
     horizontalAlignment = Alignment.CenterHorizontally,
     verticalArrangement = Arrangement.Center,
   ) {
@@ -595,9 +625,7 @@ private fun AlphabetScrubber(
         fontSize = 10.sp,
         fontWeight = FontWeight.SemiBold,
         color = IosBlue,
-        modifier = Modifier
-          .clickable { onLetterClick(letter) }
-          .padding(vertical = 0.5.dp, horizontal = 2.dp),
+        modifier = Modifier.padding(vertical = 0.5.dp, horizontal = 2.dp),
       )
     }
     Text(
