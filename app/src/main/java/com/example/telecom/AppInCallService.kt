@@ -1,6 +1,7 @@
 package com.example.telecom
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Build
 import android.telecom.Call
 import android.telecom.CallAudioState
@@ -8,8 +9,14 @@ import android.telecom.CallEndpoint
 import android.telecom.InCallService
 import androidx.annotation.RequiresApi
 import com.example.MainActivity
+import com.example.notification.OngoingCallNotificationManager
 
 class AppInCallService : InCallService() {
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    OngoingCallNotificationManager.onConfigurationChanged(this)
+  }
 
   override fun onCallAdded(call: Call) {
     super.onCallAdded(call)

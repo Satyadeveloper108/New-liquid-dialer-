@@ -1,12 +1,15 @@
 package com.example.notification
 
 import android.Manifest
+import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
@@ -24,6 +27,43 @@ object OngoingCallNotificationManager {
 
   const val ACTION_HANG_UP = "com.example.action.HANG_UP"
   const val ACTION_TOGGLE_SPEAKER = "com.example.action.TOGGLE_SPEAKER"
+
+  // App theme tokens for Liquid Glass notification card and text
+  private const val CARD_COLOR_DARK = 0xFF1C1C1E.toInt()
+  private const val CARD_COLOR_LIGHT = 0xFFFFFFFF.toInt()
+
+  private const val TEXT_PRIMARY_DARK = 0xFFFFFFFF.toInt()
+  private const val TEXT_PRIMARY_LIGHT = 0xFF000000.toInt()
+
+  private const val TEXT_SECONDARY_DARK = 0xFFA0A5B5.toInt()
+  private const val TEXT_SECONDARY_LIGHT = 0xFF8E8E93.toInt()
+
+  private var lastSession: CallSession? = null
+  private var componentCallbacksRegistered = false
+
+  fun onConfigurationChanged(context: Context) {
+    lastSession?.let { session ->
+      showOrUpdateNotification(context, session)
+    }
+  }
+
+  private fun ensureComponentCallbacks(context: Context) {
+    if (!componentCallbacksRegistered) {
+      val app = context.applicationContext as? Application ?: return
+      app.registerComponentCallbacks(object : ComponentCallbacks2 {
+        override fun onConfigurationChanged(newConfig: Configuration) {
+          lastSession?.let { session ->
+            showOrUpdateNotification(app, session)
+          }
+        }
+
+        override fun onLowMemory() {}
+
+        override fun onTrimMemory(level: Int) {}
+      })
+      componentCallbacksRegistered = true
+    }
+  }
 
   fun createNotificationChannel(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -49,6 +89,9 @@ object OngoingCallNotificationManager {
       return
     }
 
+    lastSession = session
+    ensureComponentCallbacks(context)
+
     // Check POST_NOTIFICATIONS permission on Android 13+
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       val hasPermission = ContextCompat.checkSelfPermission(
@@ -61,6 +104,12 @@ object OngoingCallNotificationManager {
     }
 
     createNotificationChannel(context)
+
+    // Determine card background and text colors based on current system UI mode (Dark / Light)
+    val isNightMode = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    val cardColor = if (isNightMode) CARD_COLOR_DARK else CARD_COLOR_LIGHT
+    val primaryTextColor = if (isNightMode) TEXT_PRIMARY_DARK else TEXT_PRIMARY_LIGHT
+    val secondaryTextColor = if (isNightMode) TEXT_SECONDARY_DARK else TEXT_SECONDARY_LIGHT
 
     // Intent to open MainActivity when tapping the notification body
     val contentIntent = Intent(context, MainActivity::class.java).apply {
@@ -103,6 +152,8 @@ object OngoingCallNotificationManager {
     val notificationLayout = RemoteViews(context.packageName, R.layout.notification_ongoing_call).apply {
       setTextViewText(R.id.tv_notification_duration, session.formattedDuration)
       setTextViewText(R.id.tv_notification_caller_name, callerTitle)
+      setTextColor(R.id.tv_notification_caller_name, primaryTextColor)
+      setTextColor(R.id.tv_notification_duration, secondaryTextColor)
 
       // Configure speaker button icon and background state
       if (session.isSpeaker) {
@@ -124,6 +175,8 @@ object OngoingCallNotificationManager {
       .setCustomContentView(notificationLayout)
       .setCustomBigContentView(notificationLayout)
       .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+      .setColorized(true)
+      .setColor(cardColor)
       .setOngoing(true)
       .setAutoCancel(false)
       .setOnlyAlertOnce(true)
@@ -136,6 +189,7 @@ object OngoingCallNotificationManager {
   }
 
   fun cancelNotification(context: Context) {
+    lastSession = null
     val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
     notificationManager?.cancel(NOTIFICATION_ID)
   }

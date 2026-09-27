@@ -16,7 +16,9 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import android.content.res.Configuration
 import androidx.core.content.ContextCompat
+import com.example.notification.OngoingCallNotificationManager
 import com.example.ui.DialerApp
 import com.example.ui.theme.PhoneTheme
 import com.example.viewmodel.DialerViewModel
@@ -78,6 +80,11 @@ class MainActivity : ComponentActivity() {
   override fun onResume() {
     super.onResume()
     dialerViewModel.refreshPermissions(this)
+  }
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    OngoingCallNotificationManager.onConfigurationChanged(this)
   }
 
   /**
