@@ -18,6 +18,7 @@ import com.example.model.Contact
 import com.example.model.NavTab
 import com.example.model.RecentsFilter
 import com.example.model.VoicemailItem
+import com.example.notification.OngoingCallNotificationManager
 import com.example.telecom.TelecomCallManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -109,6 +110,9 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
   init {
     loadDeviceDataIfPermitted()
 
+    // Initialize Telecom Call Manager with Application Context
+    TelecomCallManager.init(application)
+
     // Connect real Telecom call lookup and state listener
     TelecomCallManager.setContactNameLookup { number ->
       findContactName(number)
@@ -122,6 +126,18 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
         } else if (_callSession.value?.isRealCall == true) {
           _callSession.value = null
           _isCallMinimized.value = false
+        }
+      }
+    }
+
+    // Manage persistent ongoing call notification tied to active call session
+    viewModelScope.launch {
+      _callSession.collect { session ->
+        val context = getApplication<Application>()
+        if (session != null && (session.state == CallState.ACTIVE || session.state == CallState.HOLDING)) {
+          OngoingCallNotificationManager.showOrUpdateNotification(context, session)
+        } else {
+          OngoingCallNotificationManager.cancelNotification(context)
         }
       }
     }
@@ -375,6 +391,8 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
       state = initialState,
       durationSeconds = 0,
       isRealCall = isReal,
+      wasAnswered = (initialState == CallState.ACTIVE),
+      isIncomingCall = false,
     )
     _isCallMinimized.value = false
 
@@ -386,7 +404,7 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
       dialingJob = viewModelScope.launch {
         delay(3000)
         if (_callSession.value?.state == CallState.DIALING) {
-          _callSession.update { it?.copy(state = CallState.ACTIVE) }
+          _callSession.update { it?.copy(state = CallState.ACTIVE, wasAnswered = true) }
           startCallTimer()
         }
       }
@@ -401,6 +419,8 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
       phoneNumber = number,
       state = CallState.RINGING,
       durationSeconds = 0,
+      wasAnswered = false,
+      isIncomingCall = true,
     )
     _isCallMinimized.value = false
   }
@@ -408,7 +428,7 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
   fun acceptCall() {
     TelecomCallManager.answer()
     val current = _callSession.value ?: return
-    _callSession.value = current.copy(state = CallState.ACTIVE)
+    _callSession.value = current.copy(state = CallState.ACTIVE, wasAnswered = true)
     startCallTimer()
   }
 

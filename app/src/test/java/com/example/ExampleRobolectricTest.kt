@@ -213,6 +213,25 @@ class ExampleRobolectricTest {
   }
 
   @Test
+  fun `declining incoming ringing call clears session immediately without active call state`() {
+    val viewModel = createViewModel()
+    viewModel.simulateIncomingCall(name = "Declined Caller", number = "5559876")
+    val ringingSession = viewModel.callSession.value
+    assertNotNull(ringingSession)
+    assertEquals(CallState.RINGING, ringingSession?.state)
+    assertEquals(true, ringingSession?.isIncomingCall)
+    assertEquals(false, ringingSession?.wasAnswered)
+
+    // Decline directly from ringing state
+    viewModel.declineCall()
+    assertNull(viewModel.callSession.value)
+
+    // Verify missed call record is added to recents
+    val firstRecent = viewModel.recents.value.firstOrNull()
+    assertEquals("Declined Caller", firstRecent?.contactName)
+  }
+
+  @Test
   fun `second call and call waiting state handling`() {
     val viewModel = createViewModel()
     viewModel.startCall(name = "Call 1", number = "111")
@@ -332,5 +351,17 @@ class ExampleRobolectricTest {
       inMemoryContacts = savedContacts,
     )
     assertEquals("+919999988888", rawFallback)
+  }
+
+  @Test
+  fun `ongoing call notification manager creates channel and cancels without error`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    com.example.notification.OngoingCallNotificationManager.createNotificationChannel(context)
+    com.example.notification.OngoingCallNotificationManager.cancelNotification(context)
+
+    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+    val channel = notificationManager?.getNotificationChannel(com.example.notification.OngoingCallNotificationManager.CHANNEL_ID)
+    assertNotNull(channel)
+    assertEquals(android.app.NotificationManager.IMPORTANCE_LOW, channel?.importance)
   }
 }

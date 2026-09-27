@@ -233,12 +233,12 @@ fun DialerApp(
       }
     }
 
-    // Active & Outgoing Call Full-Screen Overlay (DIALING, ACTIVE, HOLDING, DISCONNECTED when not minimized)
+    // Active & Outgoing Call Full-Screen Overlay (DIALING, ACTIVE, HOLDING, or DISCONNECTED for answered/outgoing calls)
     AnimatedVisibility(
       visible = (callSession?.state?.isActive == true ||
                  callSession?.state?.isDialing == true ||
                  callSession?.state?.isHolding == true ||
-                 callSession?.state?.isDisconnected == true) && !isCallMinimized,
+                 (callSession?.state?.isDisconnected == true && (callSession?.wasAnswered == true || callSession?.isIncomingCall == false))) && !isCallMinimized,
       enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
       exit = fadeOut(),
     ) {

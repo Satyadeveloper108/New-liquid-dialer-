@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="true"
@@ -52,6 +53,16 @@
             </intent-filter>
         </activity>
         
+        <!-- Broadcast Receiver for Ongoing Call Notification Actions -->
+        <receiver
+            android:name=".notification.OngoingCallActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.action.HANG_UP" />
+                <action android:name="com.example.action.TOGGLE_SPEAKER" />
+            </intent-filter>
+        </receiver>
+
         <!-- Cellular InCallService for receiving and handling real phone calls -->
         <service
             android:name=".telecom.AppInCallService"

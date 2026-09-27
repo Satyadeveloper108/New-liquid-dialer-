@@ -101,6 +101,8 @@ data class CallSession(
   val waitingCallName: String? = null,
   val waitingCallNumber: String? = null,
   val hasWaitingCall: Boolean = false,
+  val wasAnswered: Boolean = false,
+  val isIncomingCall: Boolean = false,
 ) {
   val hasMultipleCalls: Boolean
     get() = heldCallName != null || isConference || hasWaitingCall

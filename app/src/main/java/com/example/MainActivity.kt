@@ -161,6 +161,14 @@ class MainActivity : ComponentActivity() {
     } else {
       false
     }
+    val needsNotifications = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      ContextCompat.checkSelfPermission(
+        this,
+        Manifest.permission.POST_NOTIFICATIONS,
+      ) != PackageManager.PERMISSION_GRANTED
+    } else {
+      false
+    }
 
     val permsToRequest = mutableListOf<String>()
     if (needsCallLog) {
@@ -171,6 +179,9 @@ class MainActivity : ComponentActivity() {
     }
     if (needsBluetooth && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
       permsToRequest.add(Manifest.permission.BLUETOOTH_CONNECT)
+    }
+    if (needsNotifications && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      permsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
     }
 
     if (permsToRequest.isNotEmpty()) {

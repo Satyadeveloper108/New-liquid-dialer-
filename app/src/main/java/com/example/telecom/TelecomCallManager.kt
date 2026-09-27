@@ -41,6 +41,10 @@ object TelecomCallManager {
   private var waitingCall: Call? = null
   private var isConferenceState = false
 
+  // Track incoming ringing calls vs answered/outgoing calls
+  private val incomingRingingCalls = mutableSetOf<Call>()
+  private val answeredCalls = mutableSetOf<Call>()
+
   private var inCallService: InCallService? = null
   private var contactNameLookup: ((String) -> String?)? = null
 
@@ -68,12 +72,19 @@ object TelecomCallManager {
     }
   }
 
+  private var appContext: Context? = null
+
+  fun init(context: Context) {
+    appContext = context.applicationContext
+  }
+
   fun setContactNameLookup(lookup: (String) -> String?) {
     contactNameLookup = lookup
   }
 
   fun registerInCallService(service: InCallService) {
     inCallService = service
+    appContext = service.applicationContext
   }
 
   fun unregisterInCallService(service: InCallService) {
@@ -83,6 +94,8 @@ object TelecomCallManager {
       availableCallEndpoints = emptyList()
       currentCallAudioState = null
       callList.clear()
+      incomingRingingCalls.clear()
+      answeredCalls.clear()
       activeCall = null
       heldCall = null
       waitingCall = null
@@ -103,6 +116,7 @@ object TelecomCallManager {
     disconnectionCleanupJob?.cancel()
 
     if (call.state == Call.STATE_RINGING) {
+      incomingRingingCalls.add(call)
       if (activeCall != null || heldCall != null) {
         // Second incoming call -> Call Waiting
         waitingCall = call
@@ -110,6 +124,9 @@ object TelecomCallManager {
         activeCall = call
       }
     } else {
+      if (call.state == Call.STATE_ACTIVE) {
+        answeredCalls.add(call)
+      }
       // Outgoing or active call
       if (activeCall != null && activeCall != call) {
         // Automatically put existing active call on hold
@@ -140,6 +157,10 @@ object TelecomCallManager {
   }
 
   fun onCallRemoved(call: Call) {
+    val wasIncomingNeverAnswered = incomingRingingCalls.contains(call) && !answeredCalls.contains(call)
+    incomingRingingCalls.remove(call)
+    val wasAnswered = answeredCalls.remove(call)
+
     call.unregisterCallback(callCallback)
     callList.remove(call)
 
@@ -168,28 +189,34 @@ object TelecomCallManager {
 
     if (callList.isEmpty()) {
       isConferenceState = false
-      _telecomCallSession.update { current ->
-        current?.copy(
-          state = CallState.DISCONNECTED,
-          heldCallName = null,
-          heldCallNumber = null,
-          canSwapCalls = false,
-          canMergeCalls = false,
-          isConference = false,
-          waitingCallName = null,
-          waitingCallNumber = null,
-          hasWaitingCall = false,
-        )
-      }
-
       callDurationJob?.cancel()
       dtmfStopJob?.cancel()
-
-      // Keep DISCONNECTED status visible briefly ("Call Ended") before resetting
       disconnectionCleanupJob?.cancel()
-      disconnectionCleanupJob = scope.launch {
-        delay(1200)
+
+      if (wasIncomingNeverAnswered) {
+        // Declined / missed incoming call that was never answered: dismiss immediately with no "Call Ended" flash
         _telecomCallSession.value = null
+      } else {
+        _telecomCallSession.update { current ->
+          current?.copy(
+            state = CallState.DISCONNECTED,
+            heldCallName = null,
+            heldCallNumber = null,
+            canSwapCalls = false,
+            canMergeCalls = false,
+            isConference = false,
+            waitingCallName = null,
+            waitingCallNumber = null,
+            hasWaitingCall = false,
+            wasAnswered = wasAnswered,
+          )
+        }
+
+        // Keep DISCONNECTED status visible briefly ("Call Ended") for answered/outgoing calls before resetting
+        disconnectionCleanupJob = scope.launch {
+          delay(1000)
+          _telecomCallSession.value = null
+        }
       }
     } else {
       refreshMultiCallSessionState()
@@ -198,7 +225,20 @@ object TelecomCallManager {
 
   private fun handleStateChange(call: Call, state: Int) {
     when (state) {
+      Call.STATE_ACTIVE -> {
+        answeredCalls.add(call)
+        incomingRingingCalls.remove(call)
+        if (waitingCall == call) {
+          waitingCall = null
+        }
+        activeCall = call
+        val other = callList.firstOrNull { it != call && it.state == Call.STATE_HOLDING }
+        if (other != null) {
+          heldCall = other
+        }
+      }
       Call.STATE_HOLDING -> {
+        answeredCalls.add(call)
         if (activeCall == call) {
           heldCall = call
           val other = callList.firstOrNull { it != call && it.state == Call.STATE_ACTIVE }
@@ -209,18 +249,20 @@ object TelecomCallManager {
           heldCall = call
         }
       }
-      Call.STATE_ACTIVE -> {
-        if (waitingCall == call) {
-          waitingCall = null
-        }
-        activeCall = call
-        val other = callList.firstOrNull { it != call && it.state == Call.STATE_HOLDING }
-        if (other != null) {
-          heldCall = other
-        }
-      }
-      Call.STATE_DISCONNECTED -> {
+      Call.STATE_DISCONNECTED, Call.STATE_DISCONNECTING -> {
         if (waitingCall == call) waitingCall = null
+        val wasIncomingNeverAnswered = incomingRingingCalls.contains(call) && !answeredCalls.contains(call)
+        if (wasIncomingNeverAnswered) {
+          incomingRingingCalls.remove(call)
+          if (activeCall == call) activeCall = null
+          if (heldCall == call) heldCall = null
+          callList.remove(call)
+          if (callList.isEmpty()) {
+            disconnectionCleanupJob?.cancel()
+            _telecomCallSession.value = null
+            return
+          }
+        }
       }
     }
 
@@ -243,6 +285,9 @@ object TelecomCallManager {
     if (primary == null) {
       return
     }
+
+    val isIncoming = incomingRingingCalls.contains(primary)
+    val wasAnswered = answeredCalls.contains(primary) || primary.state == Call.STATE_ACTIVE || primary.state == Call.STATE_HOLDING
 
     val primaryState = when (primary.state) {
       Call.STATE_RINGING -> CallState.RINGING
@@ -274,6 +319,7 @@ object TelecomCallManager {
     val isHold = primary.state == Call.STATE_HOLDING && secondary == null
 
     _telecomCallSession.update { existing ->
+      val hasBeenAnswered = existing?.wasAnswered == true || wasAnswered
       if (existing != null) {
         existing.copy(
           callerName = if (isConferenceState) "Conference Call" else primaryName,
@@ -289,6 +335,8 @@ object TelecomCallManager {
           waitingCallNumber = waitNumber,
           hasWaitingCall = waiting != null,
           isRealCall = true,
+          wasAnswered = hasBeenAnswered,
+          isIncomingCall = isIncoming,
         )
       } else {
         CallSession(
@@ -306,6 +354,8 @@ object TelecomCallManager {
           waitingCallNumber = waitNumber,
           hasWaitingCall = waiting != null,
           isRealCall = true,
+          wasAnswered = hasBeenAnswered,
+          isIncomingCall = isIncoming,
         )
       }
     }
@@ -894,7 +944,11 @@ object TelecomCallManager {
   fun answer() {
     try {
       val call = waitingCall ?: activeCall ?: heldCall
-      call?.answer(VideoProfile.STATE_AUDIO_ONLY)
+      call?.let {
+        answeredCalls.add(it)
+        incomingRingingCalls.remove(it)
+        it.answer(VideoProfile.STATE_AUDIO_ONLY)
+      }
       if (call == waitingCall) {
         activeCall = waitingCall
         waitingCall = null
@@ -909,11 +963,15 @@ object TelecomCallManager {
   fun reject() {
     try {
       val call = waitingCall ?: activeCall ?: heldCall
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        call?.reject(Call.REJECT_REASON_DECLINED)
-      } else {
-        @Suppress("DEPRECATION")
-        call?.reject(false, null)
+      call?.let {
+        incomingRingingCalls.remove(it)
+        answeredCalls.remove(it)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+          it.reject(Call.REJECT_REASON_DECLINED)
+        } else {
+          @Suppress("DEPRECATION")
+          it.reject(false, null)
+        }
       }
       if (call == waitingCall) {
         waitingCall = null
@@ -922,7 +980,16 @@ object TelecomCallManager {
       } else if (call == heldCall) {
         heldCall = null
       }
-      refreshMultiCallSessionState()
+      if (call != null) {
+        callList.remove(call)
+      }
+
+      if (callList.isEmpty()) {
+        disconnectionCleanupJob?.cancel()
+        _telecomCallSession.value = null
+      } else {
+        refreshMultiCallSessionState()
+      }
     } catch (e: Exception) {
       e.printStackTrace()
     }
