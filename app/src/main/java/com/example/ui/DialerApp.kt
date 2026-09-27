@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -241,7 +242,10 @@ fun DialerApp(
     AnimatedVisibility(
       visible = callSession?.state?.isRinging == true,
       enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-      exit = fadeOut(),
+      exit = slideOutVertically(
+        targetOffsetY = { it },
+        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+      ),
     ) {
       callSession?.let { session ->
         IncomingCallScreen(
@@ -259,7 +263,10 @@ fun DialerApp(
                  callSession?.state?.isHolding == true ||
                  (callSession?.state?.isDisconnected == true && (callSession?.wasAnswered == true || callSession?.isIncomingCall == false))) && !isCallMinimized,
       enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-      exit = fadeOut(),
+      exit = slideOutVertically(
+        targetOffsetY = { it },
+        animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+      ),
     ) {
       callSession?.let { session ->
         ActiveCallScreen(

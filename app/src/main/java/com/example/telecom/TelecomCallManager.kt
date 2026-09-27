@@ -191,10 +191,10 @@ object TelecomCallManager {
       isConferenceState = false
       callDurationJob?.cancel()
       dtmfStopJob?.cancel()
-      disconnectionCleanupJob?.cancel()
 
       if (wasIncomingNeverAnswered) {
         // Declined / missed incoming call that was never answered: dismiss immediately with no "Call Ended" flash
+        disconnectionCleanupJob?.cancel()
         _telecomCallSession.value = null
       } else {
         _telecomCallSession.update { current ->
@@ -212,10 +212,12 @@ object TelecomCallManager {
           )
         }
 
-        // Keep DISCONNECTED status visible briefly ("Call Ended") for answered/outgoing calls before resetting
-        disconnectionCleanupJob = scope.launch {
-          delay(1000)
-          _telecomCallSession.value = null
+        // Keep DISCONNECTED status visible briefly ("Call Ended") for answered/outgoing calls at full opacity before resetting
+        if (disconnectionCleanupJob?.isActive != true) {
+          disconnectionCleanupJob = scope.launch {
+            delay(600)
+            _telecomCallSession.value = null
+          }
         }
       }
     } else {
@@ -1013,8 +1015,14 @@ object TelecomCallManager {
       } else if (callList.isNotEmpty()) {
         callList.forEach { it.disconnect() }
       }
-      _telecomCallSession.update { it?.copy(state = CallState.DISCONNECTED) }
       callDurationJob?.cancel()
+      dtmfStopJob?.cancel()
+      disconnectionCleanupJob?.cancel()
+      _telecomCallSession.update { it?.copy(state = CallState.DISCONNECTED) }
+      disconnectionCleanupJob = scope.launch {
+        delay(600)
+        _telecomCallSession.value = null
+      }
     } catch (e: Exception) {
       e.printStackTrace()
     }

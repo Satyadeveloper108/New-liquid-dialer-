@@ -301,19 +301,19 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
     val hasContacts = repository.hasContactsPermission(context)
     val hasCall = repository.hasCallLogPermission(context)
 
-    if (hasContacts != _hasContactsPermission.value) {
-      _hasContactsPermission.value = hasContacts
-      if (hasContacts) {
+    _hasContactsPermission.value = hasContacts
+    if (hasContacts) {
+      if (_contacts.value.isEmpty()) {
         loadRealContacts()
-        registerContactsObserver()
       }
+      registerContactsObserver()
     }
-    if (hasCall != _hasCallLogPermission.value) {
-      _hasCallLogPermission.value = hasCall
-      if (hasCall) {
-        loadRealCallLogs()
-        registerCallLogObserver()
+    _hasCallLogPermission.value = hasCall
+    if (hasCall) {
+      if (_recents.value.isEmpty()) {
+        loadRealCallLogsWithRetry()
       }
+      registerCallLogObserver()
     }
   }
 
@@ -325,8 +325,8 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
     }
     _hasCallLogPermission.value = callLogGranted
     if (callLogGranted) {
-      loadRealCallLogs()
       registerCallLogObserver()
+      loadRealCallLogsWithRetry()
     }
   }
 
@@ -341,8 +341,22 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
   fun onCallLogPermissionResult(isGranted: Boolean) {
     _hasCallLogPermission.value = isGranted
     if (isGranted) {
-      loadRealCallLogs()
       registerCallLogObserver()
+      loadRealCallLogsWithRetry()
+    }
+  }
+
+  fun loadRealCallLogsWithRetry() {
+    viewModelScope.launch {
+      loadRealCallLogs()
+      delay(350)
+      if (_recents.value.isEmpty()) {
+        loadRealCallLogs()
+      }
+      delay(800)
+      if (_recents.value.isEmpty()) {
+        loadRealCallLogs()
+      }
     }
   }
 
@@ -611,8 +625,8 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
   }
 
   fun endCall() {
-    TelecomCallManager.endCall()
     val current = _callSession.value
+    TelecomCallManager.endCall()
     if (current != null) {
       val newRecord = CallRecord(
         id = System.currentTimeMillis().toString(),
@@ -626,8 +640,15 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
     }
     callTimerJob?.cancel()
     dialingJob?.cancel()
-    _callSession.value = null
-    _isCallMinimized.value = false
+
+    if (current?.isRealCall == true) {
+      // In lockstep with TelecomCallManager, transition to DISCONNECTED.
+      // TelecomCallManager will set _telecomCallSession to null after the brief full-opacity confirmation.
+      _callSession.update { it?.copy(state = CallState.DISCONNECTED) }
+    } else {
+      _callSession.value = null
+      _isCallMinimized.value = false
+    }
     refreshCallLogsAfterCallEnded()
   }
 
