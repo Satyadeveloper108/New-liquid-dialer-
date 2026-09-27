@@ -38,6 +38,8 @@ import com.example.ui.screens.VoicemailScreen
 import com.example.ui.theme.LocalIosColors
 import com.example.viewmodel.DialerViewModel
 
+import androidx.compose.foundation.lazy.rememberLazyListState
+
 @Composable
 fun DialerApp(
   viewModel: DialerViewModel,
@@ -51,6 +53,7 @@ fun DialerApp(
   val recentsFilter by viewModel.recentsFilter.collectAsStateWithLifecycle()
   val contactsSearchQuery by viewModel.contactsSearchQuery.collectAsStateWithLifecycle()
   val contacts by viewModel.filteredContacts.collectAsStateWithLifecycle()
+  val groupedContacts by viewModel.groupedContacts.collectAsStateWithLifecycle()
   val favourites by viewModel.favouriteContacts.collectAsStateWithLifecycle()
   val recents by viewModel.recents.collectAsStateWithLifecycle()
   val voicemails by viewModel.voicemails.collectAsStateWithLifecycle()
@@ -62,6 +65,11 @@ fun DialerApp(
   val hasCallLogPermission by viewModel.hasCallLogPermission.collectAsStateWithLifecycle()
   val isRealDeviceContacts by viewModel.isRealDeviceContacts.collectAsStateWithLifecycle()
   val isLoadingContacts by viewModel.isLoadingContacts.collectAsStateWithLifecycle()
+
+  // Hoisted LazyListStates to preserve scroll positions across tab navigation
+  val contactsListState = rememberLazyListState()
+  val recentsListState = rememberLazyListState()
+  val favouritesListState = rememberLazyListState()
 
   var prefilledAddContactNumber by remember { mutableStateOf<String?>(null) }
 
@@ -103,22 +111,22 @@ fun DialerApp(
           transitionSpec = {
             if (targetState.ordinal > initialState.ordinal) {
               (slideInHorizontally(
-                animationSpec = tween(280, easing = FastOutSlowInEasing),
+                animationSpec = tween(220, easing = FastOutSlowInEasing),
                 initialOffsetX = { fullWidth -> fullWidth },
-              ) + fadeIn(animationSpec = tween(200))) togetherWith
+              ) + fadeIn(animationSpec = tween(160))) togetherWith
                 (slideOutHorizontally(
-                  animationSpec = tween(280, easing = FastOutSlowInEasing),
+                  animationSpec = tween(220, easing = FastOutSlowInEasing),
                   targetOffsetX = { fullWidth -> -fullWidth },
-                ) + fadeOut(animationSpec = tween(150)))
+                ) + fadeOut(animationSpec = tween(120)))
             } else {
               (slideInHorizontally(
-                animationSpec = tween(280, easing = FastOutSlowInEasing),
+                animationSpec = tween(220, easing = FastOutSlowInEasing),
                 initialOffsetX = { fullWidth -> -fullWidth },
-              ) + fadeIn(animationSpec = tween(200))) togetherWith
+              ) + fadeIn(animationSpec = tween(160))) togetherWith
                 (slideOutHorizontally(
-                  animationSpec = tween(280, easing = FastOutSlowInEasing),
+                  animationSpec = tween(220, easing = FastOutSlowInEasing),
                   targetOffsetX = { fullWidth -> fullWidth },
-                ) + fadeOut(animationSpec = tween(150)))
+                ) + fadeOut(animationSpec = tween(120)))
             }
           },
           label = "tab_switch_transition",
@@ -127,6 +135,7 @@ fun DialerApp(
             NavTab.FAVOURITES -> {
               FavouritesScreen(
                 favourites = favourites,
+                listState = favouritesListState,
                 onContactClick = { contact ->
                   viewModel.startOutgoingCall(contact.name, contact.phoneNumber)
                 },
@@ -145,6 +154,7 @@ fun DialerApp(
                 selectedFilter = recentsFilter,
                 hasCallLogPermission = hasCallLogPermission,
                 onRequestDefaultDialer = onRequestDefaultDialer,
+                listState = recentsListState,
                 onFilterSelected = { viewModel.setRecentsFilter(it) },
                 onCallRecordClick = { record ->
                   viewModel.startOutgoingCall(record.contactName, record.phoneNumber)
@@ -161,10 +171,12 @@ fun DialerApp(
             NavTab.CONTACTS -> {
               ContactsScreen(
                 contacts = contacts,
+                groupedContacts = groupedContacts,
                 searchQuery = contactsSearchQuery,
                 hasContactsPermission = hasContactsPermission,
                 isRealDeviceContacts = isRealDeviceContacts,
                 isLoadingContacts = isLoadingContacts,
+                listState = contactsListState,
                 onSearchQueryChange = { viewModel.setContactsSearchQuery(it) },
                 onContactClick = { contact ->
                   viewModel.startOutgoingCall(contact.name, contact.phoneNumber)

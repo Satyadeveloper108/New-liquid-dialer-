@@ -25,6 +25,7 @@ import com.example.model.RecentsFilter
 import com.example.model.VoicemailItem
 import com.example.notification.OngoingCallNotificationManager
 import com.example.telecom.TelecomCallManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,10 +33,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class DialerViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -49,7 +52,8 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
 
   val formattedNumber: StateFlow<String> = _dialedDigits.map { raw ->
     formatDialerNumber(raw)
-  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+  }.flowOn(Dispatchers.Default)
+   .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 
   private val _recentsFilter = MutableStateFlow(RecentsFilter.ALL)
   val recentsFilter: StateFlow<RecentsFilter> = _recentsFilter.asStateFlow()
@@ -82,11 +86,18 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
         it.name.contains(cleanQuery, ignoreCase = true) || it.phoneNumber.contains(cleanQuery)
       }
     }
-  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SampleDataProvider.sampleContacts)
+  }.flowOn(Dispatchers.Default)
+   .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SampleDataProvider.sampleContacts)
+
+  val groupedContacts: StateFlow<Map<Char, List<Contact>>> = filteredContacts.map { list ->
+    list.groupBy { it.initial }
+  }.flowOn(Dispatchers.Default)
+   .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
   val favouriteContacts: StateFlow<List<Contact>> = _contacts.map { list ->
     list.filter { it.isFavorite }
-  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+  }.flowOn(Dispatchers.Default)
+   .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
   private val _recents = MutableStateFlow(SampleDataProvider.sampleRecents)
   val recents: StateFlow<List<CallRecord>> = combine(_recents, _recentsFilter) { list, filter ->
@@ -94,14 +105,16 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
       RecentsFilter.ALL -> list
       RecentsFilter.MISSED -> list.filter { it.callType == CallType.MISSED }
     }
-  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SampleDataProvider.sampleRecents)
+  }.flowOn(Dispatchers.Default)
+   .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SampleDataProvider.sampleRecents)
 
   private val _voicemails = MutableStateFlow(SampleDataProvider.sampleVoicemails)
   val voicemails: StateFlow<List<VoicemailItem>> = _voicemails.asStateFlow()
 
   val unreadVoicemailCount: StateFlow<Int> = _voicemails.map { list ->
     list.count { !it.isRead && !it.isDeleted }
-  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1)
+  }.flowOn(Dispatchers.Default)
+   .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1)
 
   private val _callSession = MutableStateFlow<CallSession?>(null)
   val callSession: StateFlow<CallSession?> = _callSession.asStateFlow()
@@ -335,19 +348,14 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
 
   fun loadRealContacts() {
     val context = getApplication<Application>()
-    viewModelScope.launch {
+    viewModelScope.launch(Dispatchers.IO) {
       _isLoadingContacts.value = true
       try {
         val deviceList = repository.getDeviceContacts(context)
         CallerNameResolver.clearCache()
         CallerNameResolver.populateCache(deviceList)
-        if (deviceList.isNotEmpty()) {
-          _contacts.value = deviceList
-          _isRealDeviceContacts.value = true
-        } else {
-          _isRealDeviceContacts.value = true
-          _contacts.value = emptyList()
-        }
+        _contacts.value = deviceList
+        _isRealDeviceContacts.value = true
       } catch (e: Exception) {
         e.printStackTrace()
       } finally {
@@ -358,7 +366,7 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
 
   fun loadRealCallLogs() {
     val context = getApplication<Application>()
-    viewModelScope.launch {
+    viewModelScope.launch(Dispatchers.IO) {
       try {
         val logs = repository.getDeviceCallLogs(context)
         if (logs.isNotEmpty()) {
@@ -372,10 +380,12 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
 
   fun saveNewContact(name: String, phoneNumber: String, type: String = "mobile") {
     val context = getApplication<Application>()
-    viewModelScope.launch {
+    viewModelScope.launch(Dispatchers.IO) {
       val success = repository.addDeviceContact(context, name, phoneNumber, type)
       if (success) {
-        Toast.makeText(context, "Contact \"$name\" saved to device!", Toast.LENGTH_SHORT).show()
+        withContext(Dispatchers.Main) {
+          Toast.makeText(context, "Contact \"$name\" saved to device!", Toast.LENGTH_SHORT).show()
+        }
         loadRealContacts()
       } else {
         // Add to local state if writing to contacts provider fails or is forbidden
@@ -389,17 +399,21 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
           isSystemContact = false,
         )
         _contacts.update { listOf(newContact) + it }
-        Toast.makeText(context, "Contact \"$name\" added!", Toast.LENGTH_SHORT).show()
+        withContext(Dispatchers.Main) {
+          Toast.makeText(context, "Contact \"$name\" added!", Toast.LENGTH_SHORT).show()
+        }
       }
     }
   }
 
   fun seedSampleContactsToDevice() {
     val context = getApplication<Application>()
-    viewModelScope.launch {
+    viewModelScope.launch(Dispatchers.IO) {
       _isLoadingContacts.value = true
       val count = repository.seedDemoContactsToDevice(context)
-      Toast.makeText(context, "Populated $count real contacts to device!", Toast.LENGTH_SHORT).show()
+      withContext(Dispatchers.Main) {
+        Toast.makeText(context, "Populated $count real contacts to device!", Toast.LENGTH_SHORT).show()
+      }
       loadRealContacts()
     }
   }
@@ -451,14 +465,17 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
     val currentContact = _contacts.value.firstOrNull { it.id == contactId } ?: return
     val newFav = !currentContact.isFavorite
 
-    viewModelScope.launch {
-      if (currentContact.isSystemContact) {
-        repository.toggleFavoriteInDevice(context, contactId, newFav)
+    // Immediate in-memory update for 0-latency UI responsiveness
+    _contacts.update { list ->
+      list.map { contact ->
+        if (contact.id == contactId) contact.copy(isFavorite = newFav) else contact
       }
-      _contacts.update { list ->
-        list.map { contact ->
-          if (contact.id == contactId) contact.copy(isFavorite = newFav) else contact
-        }
+    }
+
+    // Persist to device asynchronously without blocking UI thread
+    if (currentContact.isSystemContact) {
+      viewModelScope.launch(Dispatchers.IO) {
+        repository.toggleFavoriteInDevice(context, contactId, newFav)
       }
     }
   }

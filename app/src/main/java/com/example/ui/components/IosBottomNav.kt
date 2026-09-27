@@ -67,6 +67,38 @@ private val tabs = listOf(
   TabItem(NavTab.VOICEMAIL, R.string.tab_voicemail, Icons.Filled.Voicemail),
 )
 
+private val NavShape = RoundedCornerShape(36.dp)
+private val PillShape = RoundedCornerShape(20.dp)
+
+private val LightNavTintGradient = Brush.verticalGradient(
+  colors = listOf(
+    Color(0x0F000000), // ~6% dark neutral tint at top
+    Color(0x1A000000), // ~10% dark neutral tint at bottom
+  ),
+)
+
+private val LightBorderBrush = Brush.verticalGradient(
+  colors = listOf(
+    Color(0x99FFFFFF), // Reflective top catch light
+    Color(0x2B000000), // ~17% dark-neutral bottom rim
+  ),
+)
+
+private val DarkBorderBrush = Brush.verticalGradient(
+  colors = listOf(
+    Color(0x33FFFFFF),
+    Color(0x1AFFFFFF),
+  ),
+)
+
+private val TopHighlightGradient = Brush.horizontalGradient(
+  colors = listOf(
+    Color.Transparent,
+    Color(0x80FFFFFF),
+    Color.Transparent,
+  ),
+)
+
 /**
  * Floating Liquid Glass iOS Bottom Navigation Bar.
  *
@@ -84,30 +116,6 @@ fun IosBottomNav(
   modifier: Modifier = Modifier,
 ) {
   val colors = LocalIosColors.current
-  val navShape = RoundedCornerShape(36.dp)
-
-  // 1. Surface Gradient
-  val lightNavTintGradient = Brush.verticalGradient(
-    colors = listOf(
-      Color(0x0F000000), // ~6% dark neutral tint at top
-      Color(0x1A000000), // ~10% dark neutral tint at bottom
-    ),
-  )
-
-  // 2. Hairline Border Brush
-  val lightBorderBrush = Brush.verticalGradient(
-    colors = listOf(
-      Color(0x99FFFFFF), // Reflective top catch light
-      Color(0x2B000000), // ~17% dark-neutral bottom rim
-    ),
-  )
-
-  val darkBorderBrush = Brush.verticalGradient(
-    colors = listOf(
-      Color(0x33FFFFFF),
-      Color(0x1AFFFFFF),
-    ),
-  )
 
   // 3. Shadow Parameters
   val elevation = if (colors.isDark) 8.dp else 10.dp
@@ -140,11 +148,11 @@ fun IosBottomNav(
         .fillMaxWidth()
         .shadow(
           elevation = elevation,
-          shape = navShape,
+          shape = NavShape,
           spotColor = spotShadowColor,
           ambientColor = ambientShadowColor,
         )
-        .clip(navShape)
+        .clip(NavShape)
         .then(
           if (colors.isDark) {
             Modifier.background(Color(0xF01C1C1E))
@@ -152,13 +160,13 @@ fun IosBottomNav(
             // Light Mode: Frosted white + smoky charcoal depth gradient
             Modifier
               .background(Color(0xEEFFFFFF))
-              .background(lightNavTintGradient)
+              .background(LightNavTintGradient)
           }
         )
         .border(
           width = 0.65.dp,
-          brush = if (colors.isDark) darkBorderBrush else lightBorderBrush,
-          shape = navShape,
+          brush = if (colors.isDark) DarkBorderBrush else LightBorderBrush,
+          shape = NavShape,
         ),
     ) {
       // Subtle top specular highlight reflection line in Light Mode
@@ -167,15 +175,7 @@ fun IosBottomNav(
           modifier = Modifier
             .fillMaxWidth()
             .height(1.dp)
-            .background(
-              Brush.horizontalGradient(
-                colors = listOf(
-                  Color.Transparent,
-                  Color(0x80FFFFFF),
-                  Color.Transparent,
-                ),
-              ),
-            ),
+            .background(TopHighlightGradient),
         )
       }
 
@@ -186,7 +186,6 @@ fun IosBottomNav(
           .padding(horizontal = 6.dp, vertical = 5.dp),
       ) {
         val tabWidth = maxWidth / tabs.size
-        val pillShape = RoundedCornerShape(20.dp)
         val pillBgColor = if (colors.isDark) Color(0x33FFFFFF) else Color(0x1A007AFF)
         val pillBorderColor = if (colors.isDark) Color(0x40FFFFFF) else Color(0x29007AFF)
 
@@ -197,9 +196,9 @@ fun IosBottomNav(
             .width(tabWidth)
             .height(48.dp)
             .padding(horizontal = 2.dp)
-            .clip(pillShape)
+            .clip(PillShape)
             .background(pillBgColor)
-            .border(0.5.dp, pillBorderColor, pillShape),
+            .border(0.5.dp, pillBorderColor, PillShape),
         )
 
         // Interactive tab row on top
@@ -229,7 +228,7 @@ fun IosBottomNav(
               modifier = Modifier
                 .weight(1f)
                 .height(48.dp)
-                .clip(pillShape)
+                .clip(PillShape)
                 .clickable(
                   interactionSource = itemInteractionSource,
                   indication = null,

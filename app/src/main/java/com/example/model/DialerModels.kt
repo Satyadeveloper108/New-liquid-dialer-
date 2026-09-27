@@ -1,5 +1,7 @@
 package com.example.model
 
+import androidx.compose.runtime.Immutable
+
 enum class NavTab {
   FAVOURITES,
   RECENTS,
@@ -44,6 +46,7 @@ enum class CallState {
     get() = this == DISCONNECTED || this == ENDED
 }
 
+@Immutable
 data class Contact(
   val id: String,
   val name: String,
@@ -58,6 +61,7 @@ data class Contact(
     get() = name.firstOrNull { it.isLetterOrDigit() }?.uppercaseChar() ?: '?'
 }
 
+@Immutable
 data class CallRecord(
   val id: String,
   val contactName: String,
@@ -69,6 +73,7 @@ data class CallRecord(
   val phoneType: String = "mobile",
 )
 
+@Immutable
 data class VoicemailItem(
   val id: String,
   val callerName: String,
@@ -80,6 +85,7 @@ data class VoicemailItem(
   val isDeleted: Boolean = false,
 )
 
+@Immutable
 data class CallSession(
   val callerName: String,
   val phoneNumber: String,
@@ -114,3 +120,4 @@ data class CallSession(
       return "%02d:%02d".format(minutes, seconds)
     }
 }
+

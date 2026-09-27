@@ -49,6 +49,9 @@ import com.example.ui.theme.LocalIosColors
  * - Clean white background
  * - Centered bold "No Favourites" text in empty state
  */
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
+
 @Composable
 fun FavouritesScreen(
   favourites: List<Contact>,
@@ -56,6 +59,7 @@ fun FavouritesScreen(
   onAddFavouriteClick: () -> Unit,
   onToggleFavorite: (String) -> Unit,
   modifier: Modifier = Modifier,
+  listState: LazyListState = rememberLazyListState(),
 ) {
   val colors = LocalIosColors.current
 
@@ -122,6 +126,7 @@ fun FavouritesScreen(
       }
     } else {
       LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
       ) {
         items(
@@ -129,11 +134,10 @@ fun FavouritesScreen(
           key = { it.id },
           contentType = { "favourite_contact" },
         ) { contact ->
-          val handleCall = remember(contact, onContactClick) { { onContactClick(contact) } }
           Row(
             modifier = Modifier
               .fillMaxWidth()
-              .clickable(onClick = handleCall)
+              .clickable { onContactClick(contact) }
               .padding(horizontal = 20.dp, vertical = 12.dp)
               .testTag("favourite_item_${contact.id}"),
             verticalAlignment = Alignment.CenterVertically,
@@ -165,7 +169,7 @@ fun FavouritesScreen(
 
             // Quick Call Icon
             IconButton(
-              onClick = handleCall,
+              onClick = { onContactClick(contact) },
               modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)

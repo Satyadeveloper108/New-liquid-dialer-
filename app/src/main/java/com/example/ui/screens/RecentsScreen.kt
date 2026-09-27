@@ -81,10 +81,10 @@ fun RecentsScreen(
   onDeleteRecord: (String) -> Unit,
   onPermissionResult: (Boolean) -> Unit = {},
   modifier: Modifier = Modifier,
+  listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
 ) {
   val colors = LocalIosColors.current
   var isEditMode by remember { mutableStateOf(false) }
-  val listState = rememberLazyListState()
 
   val callLogPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
     contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
@@ -259,32 +259,22 @@ private fun RecentCallRow(
   onDeleteRecord: (String) -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  val isMissed = remember(item.callType) { item.callType == CallType.MISSED }
-  val titleColor = remember(isMissed, colors.textPrimary) { if (isMissed) IosRed else colors.textPrimary }
-  val arrowIcon = remember(item.callType) {
-    when (item.callType) {
-      CallType.OUTGOING -> Icons.AutoMirrored.Filled.CallMade
-      CallType.INCOMING -> Icons.AutoMirrored.Filled.CallReceived
-      CallType.MISSED -> Icons.Filled.CallMissed
-    }
+  val isMissed = item.callType == CallType.MISSED
+  val titleColor = if (isMissed) IosRed else colors.textPrimary
+  val arrowIcon = when (item.callType) {
+    CallType.OUTGOING -> Icons.AutoMirrored.Filled.CallMade
+    CallType.INCOMING -> Icons.AutoMirrored.Filled.CallReceived
+    CallType.MISSED -> Icons.Filled.CallMissed
   }
-  val subtitleText = remember(item.phoneType, item.phoneNumber) {
-    "${item.phoneType.lowercase()} • ${item.phoneNumber}"
-  }
-  val avatarInitial = remember(item.contactName) {
-    item.contactName.firstOrNull()?.takeIf { it.isLetter() }?.uppercaseChar()
-  }
-  val colorIndex = remember(item.id) {
-    (item.id.hashCode().coerceAtLeast(0) % 5)
-  }
-  val handleRowClick = remember(item, onCallRecordClick) { { onCallRecordClick(item) } }
-  val handleDeleteClick = remember(item.id, onDeleteRecord) { { onDeleteRecord(item.id) } }
+  val subtitleText = "${item.phoneType.lowercase()} • ${item.phoneNumber}"
+  val avatarInitial = item.contactName.firstOrNull { it.isLetter() }?.uppercaseChar()
+  val colorIndex = (item.id.hashCode().coerceAtLeast(0) % 5)
 
   Column(modifier = modifier.fillMaxWidth()) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .clickable(onClick = handleRowClick)
+        .clickable { onCallRecordClick(item) }
         .padding(horizontal = 16.dp, vertical = 10.dp)
         .testTag("recent_item_${item.id}"),
       verticalAlignment = Alignment.CenterVertically,
@@ -292,7 +282,7 @@ private fun RecentCallRow(
       // Delete action in edit mode
       if (isEditMode) {
         IconButton(
-          onClick = handleDeleteClick,
+          onClick = { onDeleteRecord(item.id) },
           modifier = Modifier
             .padding(end = 8.dp)
             .size(28.dp),

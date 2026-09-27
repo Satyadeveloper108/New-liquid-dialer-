@@ -72,6 +72,9 @@ import com.example.ui.theme.LocalIosColors
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.rememberUpdatedState
+
 @Composable
 fun ContactsScreen(
   contacts: List<Contact>,
@@ -86,9 +89,10 @@ fun ContactsScreen(
   onPermissionResult: (Boolean) -> Unit,
   onToggleFavorite: (String) -> Unit,
   modifier: Modifier = Modifier,
+  listState: LazyListState = rememberLazyListState(),
+  groupedContacts: Map<Char, List<Contact>>? = null,
 ) {
   val colors = LocalIosColors.current
-  val listState = rememberLazyListState()
   val scope = rememberCoroutineScope()
   var scrubJob by remember { mutableStateOf<Job?>(null) }
   var showAddDialog by remember { mutableStateOf(false) }
@@ -99,8 +103,8 @@ fun ContactsScreen(
     onPermissionResult(isGranted)
   }
 
-  val groupedContacts = remember(contacts) { contacts.groupBy { it.initial } }
-  val letterToScrollIndex = remember(groupedContacts, searchQuery, hasContactsPermission, contacts.isEmpty(), isLoadingContacts) {
+  val resolvedGroupedContacts = groupedContacts ?: remember(contacts) { contacts.groupBy { it.initial } }
+  val letterToScrollIndex = remember(resolvedGroupedContacts, searchQuery, hasContactsPermission, contacts.isEmpty(), isLoadingContacts) {
     var currentIndex = 0
     if (searchQuery.isEmpty()) {
       currentIndex++ // "my_card"
@@ -109,7 +113,7 @@ fun ContactsScreen(
       currentIndex++ // "empty_device_contacts"
     }
     val map = mutableMapOf<Char, Int>()
-    groupedContacts.forEach { (initial, list) ->
+    resolvedGroupedContacts.forEach { (initial, list) ->
       map[initial] = currentIndex
       currentIndex += 1 + list.size // header + list items
     }
@@ -337,7 +341,7 @@ fun ContactsScreen(
         }
 
         // Alphabetically Grouped Contacts
-        groupedContacts.forEach { (initial, contactList) ->
+        resolvedGroupedContacts.forEach { (initial, contactList) ->
           item(key = "header_$initial", contentType = "header") {
             ContactHeaderItem(
               initial = initial,
@@ -522,14 +526,11 @@ private fun ContactItemRow(
   onToggleFavorite: (String) -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  val handleRowClick = remember(contact, onContactClick) { { onContactClick(contact) } }
-  val handleFavoriteClick = remember(contact.id, onToggleFavorite) { { onToggleFavorite(contact.id) } }
-
   Column(modifier = modifier.fillMaxWidth()) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .clickable(onClick = handleRowClick)
+        .clickable { onContactClick(contact) }
         .padding(horizontal = 16.dp, vertical = 8.dp)
         .testTag("contact_item_${contact.id}"),
       verticalAlignment = Alignment.CenterVertically,
@@ -556,7 +557,7 @@ private fun ContactItemRow(
       }
 
       // Favorite Star Toggle
-      IconButton(onClick = handleFavoriteClick) {
+      IconButton(onClick = { onToggleFavorite(contact.id) }) {
         Icon(
           imageVector = if (contact.isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
           contentDescription = "Favorite",
@@ -566,7 +567,7 @@ private fun ContactItemRow(
       }
 
       // Call Quick Button
-      IconButton(onClick = handleRowClick) {
+      IconButton(onClick = { onContactClick(contact) }) {
         Icon(
           imageVector = Icons.Filled.Call,
           contentDescription = "Call",
@@ -589,6 +590,7 @@ private fun AlphabetScrubber(
   modifier: Modifier = Modifier,
 ) {
   var totalHeightPx by remember { mutableStateOf(1f) }
+  val currentLetterClick by rememberUpdatedState(onLetterClick)
 
   Column(
     modifier = modifier
@@ -600,20 +602,20 @@ private fun AlphabetScrubber(
       .pointerInput(Unit) {
         detectDragGestures(
           onDragStart = { offset ->
-            val index = ((offset.y / totalHeightPx) * AlphabetList.size).toInt().coerceIn(0, AlphabetList.lastIndex)
-            onLetterClick(AlphabetList[index])
+            val index = ((offset.y / totalHeightPx.coerceAtLeast(1f)) * AlphabetList.size).toInt().coerceIn(0, AlphabetList.lastIndex)
+            currentLetterClick(AlphabetList[index])
           },
           onDrag = { change, _ ->
             change.consume()
-            val index = ((change.position.y / totalHeightPx) * AlphabetList.size).toInt().coerceIn(0, AlphabetList.lastIndex)
-            onLetterClick(AlphabetList[index])
+            val index = ((change.position.y / totalHeightPx.coerceAtLeast(1f)) * AlphabetList.size).toInt().coerceIn(0, AlphabetList.lastIndex)
+            currentLetterClick(AlphabetList[index])
           },
         )
       }
       .pointerInput(Unit) {
         detectTapGestures { offset ->
-          val index = ((offset.y / totalHeightPx) * AlphabetList.size).toInt().coerceIn(0, AlphabetList.lastIndex)
-          onLetterClick(AlphabetList[index])
+          val index = ((offset.y / totalHeightPx.coerceAtLeast(1f)) * AlphabetList.size).toInt().coerceIn(0, AlphabetList.lastIndex)
+          currentLetterClick(AlphabetList[index])
         }
       },
     horizontalAlignment = Alignment.CenterHorizontally,
