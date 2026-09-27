@@ -3,7 +3,12 @@ package com.example.viewmodel
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.database.ContentObserver
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.provider.CallLog
+import android.provider.ContactsContract
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -70,11 +75,12 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
 
   val filteredContacts: StateFlow<List<Contact>> = combine(_contacts, _contactsSearchQuery) { list, query ->
     if (query.isBlank()) {
-      list.sortedBy { it.name }
+      list
     } else {
+      val cleanQuery = query.trim()
       list.filter {
-        it.name.contains(query, ignoreCase = true) || it.phoneNumber.contains(query)
-      }.sortedBy { it.name }
+        it.name.contains(cleanQuery, ignoreCase = true) || it.phoneNumber.contains(cleanQuery)
+      }
     }
   }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SampleDataProvider.sampleContacts)
 
@@ -105,6 +111,10 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
 
   private var callTimerJob: Job? = null
   private var dialingJob: Job? = null
+  private var callLogRefreshJob: Job? = null
+  private var contactsRefreshJob: Job? = null
+  private var callLogObserver: ContentObserver? = null
+  private var contactsObserver: ContentObserver? = null
   private val dtmfPlayer = com.example.audio.DtmfPlayer()
 
   init {
@@ -119,13 +129,22 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     viewModelScope.launch {
+      var wasInRealCall = false
       TelecomCallManager.telecomCallSession.collect { realSession ->
         if (realSession != null) {
+          if (!wasInRealCall) {
+            _isCallMinimized.value = false
+            wasInRealCall = true
+          }
           _callSession.value = realSession
-          _isCallMinimized.value = false
-        } else if (_callSession.value?.isRealCall == true) {
-          _callSession.value = null
-          _isCallMinimized.value = false
+        } else {
+          if (_callSession.value?.isRealCall == true || wasInRealCall) {
+            _callSession.value = null
+            _isCallMinimized.value = false
+            wasInRealCall = false
+            // Real call finished - trigger immediate and staggered refresh of system call logs
+            refreshCallLogsAfterCallEnded()
+          }
         }
       }
     }
@@ -149,11 +168,110 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
     _hasContactsPermission.value = hasContacts
     if (hasContacts) {
       loadRealContacts()
+      registerContactsObserver()
     }
 
     val hasCallLog = repository.hasCallLogPermission(context)
     _hasCallLogPermission.value = hasCallLog
     if (hasCallLog) {
+      loadRealCallLogs()
+      registerCallLogObserver()
+    }
+  }
+
+  private fun registerCallLogObserver() {
+    if (callLogObserver != null) return
+    val context = getApplication<Application>()
+    if (!repository.hasCallLogPermission(context)) return
+
+    try {
+      callLogObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean, uri: Uri?) {
+          super.onChange(selfChange, uri)
+          scheduleCallLogRefresh(200L)
+        }
+      }
+      context.contentResolver.registerContentObserver(
+        CallLog.Calls.CONTENT_URI,
+        true,
+        callLogObserver!!,
+      )
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
+  }
+
+  private fun unregisterCallLogObserver() {
+    callLogObserver?.let { observer ->
+      try {
+        getApplication<Application>().contentResolver.unregisterContentObserver(observer)
+      } catch (e: Exception) {
+        e.printStackTrace()
+      }
+      callLogObserver = null
+    }
+  }
+
+  private fun registerContactsObserver() {
+    if (contactsObserver != null) return
+    val context = getApplication<Application>()
+    if (!repository.hasContactsPermission(context)) return
+
+    try {
+      contactsObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean, uri: Uri?) {
+          super.onChange(selfChange, uri)
+          scheduleContactsRefresh(500L)
+        }
+      }
+      context.contentResolver.registerContentObserver(
+        ContactsContract.Contacts.CONTENT_URI,
+        true,
+        contactsObserver!!,
+      )
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
+  }
+
+  private fun unregisterContactsObserver() {
+    contactsObserver?.let { observer ->
+      try {
+        getApplication<Application>().contentResolver.unregisterContentObserver(observer)
+      } catch (e: Exception) {
+        e.printStackTrace()
+      }
+      contactsObserver = null
+    }
+  }
+
+  fun scheduleCallLogRefresh(delayMillis: Long = 300L) {
+    callLogRefreshJob?.cancel()
+    callLogRefreshJob = viewModelScope.launch {
+      if (delayMillis > 0) {
+        delay(delayMillis)
+      }
+      loadRealCallLogs()
+    }
+  }
+
+  fun scheduleContactsRefresh(delayMillis: Long = 500L) {
+    contactsRefreshJob?.cancel()
+    contactsRefreshJob = viewModelScope.launch {
+      if (delayMillis > 0) {
+        delay(delayMillis)
+      }
+      loadRealContacts()
+    }
+  }
+
+  fun refreshCallLogsAfterCallEnded() {
+    viewModelScope.launch {
+      // First quick refresh in case provider committed fast
+      delay(400)
+      loadRealCallLogs()
+      // Staggered follow-up to guarantee Android Telecom async write has settled
+      delay(1200)
       loadRealCallLogs()
     }
   }
@@ -174,12 +292,14 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
       _hasContactsPermission.value = hasContacts
       if (hasContacts) {
         loadRealContacts()
+        registerContactsObserver()
       }
     }
     if (hasCall != _hasCallLogPermission.value) {
       _hasCallLogPermission.value = hasCall
       if (hasCall) {
         loadRealCallLogs()
+        registerCallLogObserver()
       }
     }
   }
@@ -188,10 +308,12 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
     _hasContactsPermission.value = contactsGranted
     if (contactsGranted) {
       loadRealContacts()
+      registerContactsObserver()
     }
     _hasCallLogPermission.value = callLogGranted
     if (callLogGranted) {
       loadRealCallLogs()
+      registerCallLogObserver()
     }
   }
 
@@ -199,6 +321,7 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
     _hasContactsPermission.value = isGranted
     if (isGranted) {
       loadRealContacts()
+      registerContactsObserver()
     }
   }
 
@@ -206,6 +329,7 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
     _hasCallLogPermission.value = isGranted
     if (isGranted) {
       loadRealCallLogs()
+      registerCallLogObserver()
     }
   }
 
@@ -216,6 +340,7 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
       try {
         val deviceList = repository.getDeviceContacts(context)
         CallerNameResolver.clearCache()
+        CallerNameResolver.populateCache(deviceList)
         if (deviceList.isNotEmpty()) {
           _contacts.value = deviceList
           _isRealDeviceContacts.value = true
@@ -378,7 +503,7 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
     initialState: CallState = CallState.ACTIVE,
   ) {
     if (number.isBlank()) return
-    val contactName = name ?: findContactName(number) ?: number
+    val contactName = name ?: CallerNameResolver.fastResolve(number, _contacts.value) ?: number
     callTimerJob?.cancel()
     dialingJob?.cancel()
 
@@ -395,6 +520,21 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
       isIncomingCall = false,
     )
     _isCallMinimized.value = false
+
+    // If caller name was not provided and not yet cached, resolve asynchronously without blocking UI
+    if (name == null && (contactName == number || contactName.isBlank())) {
+      viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        val asyncResolved = CallerNameResolver.resolveCallerName(
+          context = getApplication(),
+          phoneNumber = number,
+          telecomCallerName = null,
+          inMemoryContacts = _contacts.value,
+        )
+        if (asyncResolved.isNotBlank() && asyncResolved != number && asyncResolved != "Unknown") {
+          _callSession.update { it?.copy(callerName = asyncResolved) }
+        }
+      }
+    }
 
     if (initialState == CallState.ACTIVE) {
       startCallTimer()
@@ -450,6 +590,7 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
     dialingJob?.cancel()
     _callSession.value = null
     _isCallMinimized.value = false
+    refreshCallLogsAfterCallEnded()
   }
 
   fun endCall() {
@@ -470,6 +611,7 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
     dialingJob?.cancel()
     _callSession.value = null
     _isCallMinimized.value = false
+    refreshCallLogsAfterCallEnded()
   }
 
   fun minimizeCall() {
@@ -663,6 +805,10 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
 
   override fun onCleared() {
     super.onCleared()
+    unregisterCallLogObserver()
+    unregisterContactsObserver()
+    callLogRefreshJob?.cancel()
+    contactsRefreshJob?.cancel()
     callTimerJob?.cancel()
     dtmfPlayer.release()
   }

@@ -26,6 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -123,11 +124,16 @@ fun FavouritesScreen(
       LazyColumn(
         modifier = Modifier.fillMaxSize(),
       ) {
-        items(favourites, key = { it.id }) { contact ->
+        items(
+          items = favourites,
+          key = { it.id },
+          contentType = { "favourite_contact" },
+        ) { contact ->
+          val handleCall = remember(contact, onContactClick) { { onContactClick(contact) } }
           Row(
             modifier = Modifier
               .fillMaxWidth()
-              .clickable { onContactClick(contact) }
+              .clickable(onClick = handleCall)
               .padding(horizontal = 20.dp, vertical = 12.dp)
               .testTag("favourite_item_${contact.id}"),
             verticalAlignment = Alignment.CenterVertically,
@@ -159,7 +165,7 @@ fun FavouritesScreen(
 
             // Quick Call Icon
             IconButton(
-              onClick = { onContactClick(contact) },
+              onClick = handleCall,
               modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)

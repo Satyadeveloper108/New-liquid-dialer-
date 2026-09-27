@@ -1,6 +1,9 @@
 package com.example.ui.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -8,14 +11,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -64,16 +70,11 @@ private val tabs = listOf(
 /**
  * Floating Liquid Glass iOS Bottom Navigation Bar.
  *
- * Light Mode:
- * - Frosted white surface infused with subtle black/charcoal tint (6%–10% alpha)
- * - Noticeable separation from the white background
- * - Hairline dual-tone border with top highlight catch and dark-neutral rim
- * - Diffused ambient drop shadow giving physical floating depth
- * - Top edge specular reflection line
- * - Selected tab in subtle translucent blue capsule
- *
- * Dark Mode:
- * - Preserved dark charcoal glass with high-contrast active state
+ * Features:
+ * - Real-time interruptible animated sliding indicator capsule with spring physics
+ * - Smooth instant redirection without lag during fast successive taps
+ * - Frosted glass surface with dual-tone rim and ambient shadow
+ * - Voicemail unread badge indicator
  */
 @Composable
 fun IosBottomNav(
@@ -112,6 +113,20 @@ fun IosBottomNav(
   val elevation = if (colors.isDark) 8.dp else 10.dp
   val spotShadowColor = if (colors.isDark) Color(0x50000000) else Color(0x26000000)
   val ambientShadowColor = if (colors.isDark) Color(0x20000000) else Color(0x12000000)
+
+  // Dynamic interruptible tab index animation
+  val targetIndex = remember(currentTab) {
+    tabs.indexOfFirst { it.tab == currentTab }.let { if (it >= 0) it else 0 }
+  }
+
+  val animatedIndex by animateFloatAsState(
+    targetValue = targetIndex.toFloat(),
+    animationSpec = spring(
+      dampingRatio = Spring.DampingRatioNoBouncy,
+      stiffness = Spring.StiffnessMediumLow,
+    ),
+    label = "nav_pill_indicator_offset",
+  )
 
   Box(
     modifier = modifier
@@ -164,101 +179,108 @@ fun IosBottomNav(
         )
       }
 
-      Row(
+      BoxWithConstraints(
         modifier = Modifier
           .fillMaxWidth()
           .height(58.dp)
-          .padding(horizontal = 6.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically,
+          .padding(horizontal = 6.dp, vertical = 5.dp),
       ) {
-        tabs.forEach { item ->
-          val isSelected = currentTab == item.tab
-          val title = stringResource(id = item.titleRes)
-          val itemInteractionSource = remember { MutableInteractionSource() }
+        val tabWidth = maxWidth / tabs.size
+        val pillShape = RoundedCornerShape(20.dp)
+        val pillBgColor = if (colors.isDark) Color(0x33FFFFFF) else Color(0x1A007AFF)
+        val pillBorderColor = if (colors.isDark) Color(0x40FFFFFF) else Color(0x29007AFF)
 
-          val targetContentColor = if (isSelected) {
-            IosBlue
-          } else {
-            if (colors.isDark) Color(0xFFFFFFFF) else Color(0xFF000000)
-          }
+        // Single animated sliding indicator capsule behind all items
+        Box(
+          modifier = Modifier
+            .offset(x = tabWidth * animatedIndex)
+            .width(tabWidth)
+            .height(48.dp)
+            .padding(horizontal = 2.dp)
+            .clip(pillShape)
+            .background(pillBgColor)
+            .border(0.5.dp, pillBorderColor, pillShape),
+        )
 
-          val animatedColor by animateColorAsState(
-            targetValue = targetContentColor,
-            animationSpec = tween(durationMillis = 150),
-            label = "tab_color_anim",
-          )
+        // Interactive tab row on top
+        Row(
+          modifier = Modifier.fillMaxSize(),
+          horizontalArrangement = Arrangement.SpaceEvenly,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          tabs.forEach { item ->
+            val isSelected = currentTab == item.tab
+            val title = stringResource(id = item.titleRes)
+            val itemInteractionSource = remember { MutableInteractionSource() }
 
-          val pillShape = RoundedCornerShape(20.dp)
-          val pillBgColor = if (isSelected) {
-            if (colors.isDark) Color(0x33FFFFFF) else Color(0x1A007AFF)
-          } else {
-            Color.Transparent
-          }
+            val targetContentColor = if (isSelected) {
+              IosBlue
+            } else {
+              if (colors.isDark) Color(0xFFFFFFFF) else Color(0xFF000000)
+            }
 
-          val pillBorderColor = if (isSelected) {
-            if (colors.isDark) Color(0x40FFFFFF) else Color(0x29007AFF)
-          } else {
-            Color.Transparent
-          }
+            val animatedColor by animateColorAsState(
+              targetValue = targetContentColor,
+              animationSpec = tween(durationMillis = 120),
+              label = "tab_color_anim",
+            )
 
-          Box(
-            modifier = Modifier
-              .weight(1f)
-              .height(48.dp)
-              .clip(pillShape)
-              .background(pillBgColor)
-              .border(0.5.dp, pillBorderColor, pillShape)
-              .clickable(
-                interactionSource = itemInteractionSource,
-                indication = null,
-              ) {
-                onSelectTab(item.tab)
-              }
-              .testTag("tab_${item.tab.name.lowercase()}"),
-            contentAlignment = Alignment.Center,
-          ) {
-            Column(
-              horizontalAlignment = Alignment.CenterHorizontally,
-              verticalArrangement = Arrangement.Center,
+            Box(
+              modifier = Modifier
+                .weight(1f)
+                .height(48.dp)
+                .clip(pillShape)
+                .clickable(
+                  interactionSource = itemInteractionSource,
+                  indication = null,
+                ) {
+                  onSelectTab(item.tab)
+                }
+                .testTag("tab_${item.tab.name.lowercase()}"),
+              contentAlignment = Alignment.Center,
             ) {
-              Box(contentAlignment = Alignment.TopEnd) {
-                Icon(
-                  imageVector = item.icon,
-                  contentDescription = title,
-                  tint = animatedColor,
-                  modifier = Modifier.size(24.dp),
-                )
+              Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+              ) {
+                Box(contentAlignment = Alignment.TopEnd) {
+                  Icon(
+                    imageVector = item.icon,
+                    contentDescription = title,
+                    tint = animatedColor,
+                    modifier = Modifier.size(24.dp),
+                  )
 
-                // Voicemail unread indicator badge
-                if (item.tab == NavTab.VOICEMAIL && unreadVoicemails > 0) {
-                  Box(
-                    modifier = Modifier
-                      .offset(x = 8.dp, y = (-4).dp)
-                      .size(16.dp)
-                      .clip(CircleShape)
-                      .background(IosRed)
-                      .testTag("voicemail_badge"),
-                    contentAlignment = Alignment.Center,
-                  ) {
-                    Text(
-                      text = unreadVoicemails.toString(),
-                      color = Color.White,
-                      fontSize = 10.sp,
-                      fontWeight = FontWeight.Bold,
-                      lineHeight = 10.sp,
-                    )
+                  // Voicemail unread indicator badge
+                  if (item.tab == NavTab.VOICEMAIL && unreadVoicemails > 0) {
+                    Box(
+                      modifier = Modifier
+                        .offset(x = 8.dp, y = (-4).dp)
+                        .size(16.dp)
+                        .clip(CircleShape)
+                        .background(IosRed)
+                        .testTag("voicemail_badge"),
+                      contentAlignment = Alignment.Center,
+                    ) {
+                      Text(
+                        text = unreadVoicemails.toString(),
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 10.sp,
+                      )
+                    }
                   }
                 }
-              }
 
-              Text(
-                text = title,
-                color = animatedColor,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 2.dp),
-              )
+                Text(
+                  text = title,
+                  color = animatedColor,
+                  fontSize = 10.sp,
+                  fontWeight = FontWeight.Bold,
+                  modifier = Modifier.padding(top = 2.dp),
+                )
+              }
             }
           }
         }

@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.view.HapticFeedbackConstants
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -137,6 +138,11 @@ fun ActiveCallScreen(
     CallState.HOLDING -> "on hold"
     CallState.DISCONNECTED, CallState.ENDED -> "Call Ended"
     else -> if (isHoldEffective && callSession.heldCallName == null) "on hold" else callSession.formattedDuration
+  }
+
+  // Intercept system/hardware back button to cleanly minimize the call
+  BackHandler(enabled = true) {
+    onMinimize()
   }
 
   Box(

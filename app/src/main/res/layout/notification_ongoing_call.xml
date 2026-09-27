@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/notification_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="72dp"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:background="@drawable/bg_ongoing_call_notification"
+    android:paddingStart="16dp"
+    android:paddingTop="12dp"
+    android:paddingEnd="16dp"
+    android:paddingBottom="12dp">
+
+    <!-- Left section: Live Duration and Caller Name -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_vertical"
+        android:layout_marginEnd="12dp">
+
+        <TextView
+            android:id="@+id/tv_notification_duration"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#A0A5B5"
+            android:textSize="13sp"
+            android:fontFamily="sans-serif-medium"
+            android:includeFontPadding="false"
+            android:text="00:00" />
+
+        <TextView
+            android:id="@+id/tv_notification_caller_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:text="Caller" />
+    </LinearLayout>
+
+    <!-- Right section: Circular Icon-Only Action Buttons -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <!-- Circular Speakerphone Toggle Button -->
+        <ImageView
+            android:id="@+id/btn_notification_speaker"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_notification_button_speaker_off"
+            android:src="@drawable/ic_notification_speaker_off"
+            android:scaleType="centerInside"
+            android:padding="10dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="Speaker" />
+
+        <!-- Circular Hang Up Button -->
+        <ImageView
+            android:id="@+id/btn_notification_hangup"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="12dp"
+            android:background="@drawable/bg_notification_button_hangup"
+            android:src="@drawable/ic_notification_hangup"
+            android:scaleType="centerInside"
+            android:padding="10dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="Hang up" />
+    </LinearLayout>
+</LinearLayout>

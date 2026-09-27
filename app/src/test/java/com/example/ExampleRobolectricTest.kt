@@ -232,6 +232,19 @@ class ExampleRobolectricTest {
   }
 
   @Test
+  fun `ending call inserts call record immediately into recents`() {
+    val viewModel = createViewModel()
+    viewModel.startCall(name = "John Doe", number = "5551122")
+    assertEquals(CallState.ACTIVE, viewModel.callSession.value?.state)
+
+    viewModel.endCall()
+    assertNull(viewModel.callSession.value)
+
+    val firstRecent = viewModel.recents.value.firstOrNull()
+    assertEquals("John Doe", firstRecent?.contactName)
+  }
+
+  @Test
   fun `second call and call waiting state handling`() {
     val viewModel = createViewModel()
     viewModel.startCall(name = "Call 1", number = "111")

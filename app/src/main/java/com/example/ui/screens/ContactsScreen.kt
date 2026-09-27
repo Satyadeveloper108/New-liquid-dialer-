@@ -192,8 +192,8 @@ fun ContactsScreen(
         .fillMaxWidth()
         .padding(horizontal = 16.dp, vertical = 6.dp),
     ) {
-      val searchBg = if (colors.isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)
-      val searchBorder = if (colors.isDark) Color(0x26FFFFFF) else Color(0x14000000)
+      val searchBg = remember(colors.isDark) { if (colors.isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7) }
+      val searchBorder = remember(colors.isDark) { if (colors.isDark) Color(0x26FFFFFF) else Color(0x14000000) }
 
       TextField(
         value = searchQuery,

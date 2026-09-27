@@ -17,12 +17,86 @@ object CallerNameResolver {
     cache.clear()
   }
 
+  fun populateCache(contacts: List<Contact>) {
+    for (contact in contacts) {
+      val name = contact.name.trim()
+      if (name.isBlank() || name == "Unknown") continue
+      val clean = stripFormatting(contact.phoneNumber)
+      if (clean.isNotEmpty()) {
+        cache[clean] = name
+      }
+      val digits = extractDigits(contact.phoneNumber)
+      if (digits.length >= 10) {
+        val last10 = digits.takeLast(10)
+        cache[last10] = name
+      }
+    }
+  }
+
   fun stripFormatting(raw: String): String {
-    return raw.replace("[^0-9+]".toRegex(), "")
+    if (raw.isEmpty()) return ""
+    val sb = java.lang.StringBuilder(raw.length)
+    for (i in 0 until raw.length) {
+      val c = raw[i]
+      if (c in '0'..'9' || c == '+') {
+        sb.append(c)
+      }
+    }
+    return sb.toString()
   }
 
   fun extractDigits(raw: String): String {
-    return raw.filter { it.isDigit() }
+    if (raw.isEmpty()) return ""
+    val sb = java.lang.StringBuilder(raw.length)
+    for (i in 0 until raw.length) {
+      val c = raw[i]
+      if (c in '0'..'9') {
+        sb.append(c)
+      }
+    }
+    return sb.toString()
+  }
+
+  /**
+   * Fast, non-blocking caller name resolution using only in-memory cache and contact list.
+   * Never touches ContentResolver or SQLite databases on the main thread.
+   */
+  fun fastResolve(phoneNumber: String, inMemoryContacts: List<Contact>? = null): String? {
+    val trimmedNumber = phoneNumber.trim()
+    if (trimmedNumber.isBlank()) return null
+
+    val clean = stripFormatting(trimmedNumber)
+    if (clean.isNotEmpty()) {
+      val cached = cache[clean]
+      if (cached != null) return cached
+    }
+
+    val digits = extractDigits(trimmedNumber)
+    if (digits.length >= 10) {
+      val last10 = digits.takeLast(10)
+      val cachedLast10 = cache[last10]
+      if (cachedLast10 != null) return cachedLast10
+    }
+
+    if (!inMemoryContacts.isNullOrEmpty()) {
+      for (contact in inMemoryContacts) {
+        if (contact.name.isBlank()) continue
+        val contactClean = stripFormatting(contact.phoneNumber)
+        if (contactClean.isNotEmpty() && contactClean == clean) {
+          cache[clean] = contact.name.trim()
+          return contact.name.trim()
+        }
+      }
+      for (contact in inMemoryContacts) {
+        if (contact.name.isBlank()) continue
+        if (arePhoneNumbersMatching(contact.phoneNumber, trimmedNumber)) {
+          cache[clean] = contact.name.trim()
+          return contact.name.trim()
+        }
+      }
+    }
+
+    return null
   }
 
   /**
@@ -41,7 +115,7 @@ object CallerNameResolver {
     val digitsB = extractDigits(b)
     if (digitsA.isNotEmpty() && digitsA == digitsB) return true
 
-    // Check 10-digit normalized phone matching (common for mobile numbers worldwide, including India)
+    // Check 10-digit normalized phone matching (common for mobile numbers worldwide, including India/US)
     if (digitsA.length >= 10 && digitsB.length >= 10) {
       val last10A = digitsA.takeLast(10)
       val last10B = digitsB.takeLast(10)
@@ -49,11 +123,6 @@ object CallerNameResolver {
         val prefixA = digitsA.dropLast(10)
         val prefixB = digitsB.dropLast(10)
 
-        // Matching cases:
-        // +91XXXXXXXXXX (prefix 91)
-        // 91XXXXXXXXXX (prefix 91)
-        // 0XXXXXXXXXX (prefix 0)
-        // XXXXXXXXXX (prefix "")
         if (prefixA == prefixB) return true
         if ((prefixA.isEmpty() || prefixA == "0" || prefixA == "91" || prefixA == "1") &&
           (prefixB.isEmpty() || prefixB == "0" || prefixB == "91" || prefixB == "1")
@@ -109,10 +178,11 @@ object CallerNameResolver {
 
   /**
    * Resolves caller name according to strict priority:
-   * 1. Device Contacts Provider exact phone-number match.
-   * 2. Normalized phone-number match (+91, 91, 0, raw, ignoring formatting).
-   * 3. Telecom-provided contact/caller-ID name.
-   * 4. Raw phone number as final fallback.
+   * 1. In-memory fast cache and contact list.
+   * 2. Device Contacts Provider exact phone-number match.
+   * 3. Normalized phone-number match (+91, 91, 0, raw, ignoring formatting).
+   * 4. Telecom-provided contact/caller-ID name.
+   * 5. Raw phone number as final fallback.
    */
   fun resolveCallerName(
     context: Context?,
@@ -125,40 +195,21 @@ object CallerNameResolver {
       return telecomCallerName?.takeIf { it.isNotBlank() } ?: "Unknown"
     }
 
+    // 1. Check fast memory cache & in-memory contacts first
+    val fastResult = fastResolve(trimmedNumber, inMemoryContacts)
+    if (!fastResult.isNullOrBlank()) {
+      return fastResult
+    }
+
     val cacheKey = stripFormatting(trimmedNumber)
-    if (cacheKey.isNotEmpty()) {
-      val cached = cache[cacheKey]
-      if (cached != null) {
-        return cached
-      }
-    }
 
-    // 1. Check inMemoryContacts first if available
-    if (!inMemoryContacts.isNullOrEmpty()) {
-      // Priority 1: Exact match
-      val exactMatch = inMemoryContacts.firstOrNull { contact ->
-        stripFormatting(contact.phoneNumber) == cacheKey
-      }
-      if (exactMatch != null && exactMatch.name.isNotBlank()) {
-        cache[cacheKey] = exactMatch.name.trim()
-        return exactMatch.name.trim()
-      }
-
-      // Priority 2: Normalized match
-      val normalizedMatch = inMemoryContacts.firstOrNull { contact ->
-        arePhoneNumbersMatching(contact.phoneNumber, trimmedNumber)
-      }
-      if (normalizedMatch != null && normalizedMatch.name.isNotBlank()) {
-        cache[cacheKey] = normalizedMatch.name.trim()
-        return normalizedMatch.name.trim()
-      }
-    }
-
-    // 2. Query Device Contacts Provider if context is available
+    // 2. Query Device Contacts Provider if context is available (best on background threads)
     if (context != null) {
       val providerName = queryDeviceContacts(context, trimmedNumber)
       if (!providerName.isNullOrBlank()) {
-        cache[cacheKey] = providerName
+        if (cacheKey.isNotEmpty()) {
+          cache[cacheKey] = providerName
+        }
         return providerName
       }
     }

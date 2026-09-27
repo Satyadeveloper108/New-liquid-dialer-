@@ -8,9 +8,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.MainActivity
+import com.example.R
 import com.example.model.CallSession
 import com.example.model.CallState
 
@@ -82,7 +84,7 @@ object OngoingCallNotificationManager {
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
-    // Intent for "Turn speaker on" / "Turn speaker off" action
+    // Intent for "Toggle speaker" action
     val speakerIntent = Intent(context, OngoingCallActionReceiver::class.java).apply {
       action = ACTION_TOGGLE_SPEAKER
     }
@@ -97,35 +99,37 @@ object OngoingCallNotificationManager {
       session.phoneNumber.ifBlank { "Unknown Caller" }
     }
 
-    val speakerLabel = if (session.isSpeaker) "Turn speaker off" else "Turn speaker on"
+    // Build custom iOS-style RemoteViews card layout
+    val notificationLayout = RemoteViews(context.packageName, R.layout.notification_ongoing_call).apply {
+      setTextViewText(R.id.tv_notification_duration, session.formattedDuration)
+      setTextViewText(R.id.tv_notification_caller_name, callerTitle)
 
-    val hangUpAction = NotificationCompat.Action.Builder(
-      android.R.drawable.ic_menu_close_clear_cancel,
-      "Hang up",
-      hangUpPendingIntent,
-    ).build()
+      // Configure speaker button icon and background state
+      if (session.isSpeaker) {
+        setImageViewResource(R.id.btn_notification_speaker, R.drawable.ic_notification_speaker_on)
+        setInt(R.id.btn_notification_speaker, "setBackgroundResource", R.drawable.bg_notification_button_speaker_on)
+      } else {
+        setImageViewResource(R.id.btn_notification_speaker, R.drawable.ic_notification_speaker_off)
+        setInt(R.id.btn_notification_speaker, "setBackgroundResource", R.drawable.bg_notification_button_speaker_off)
+      }
 
-    val speakerAction = NotificationCompat.Action.Builder(
-      android.R.drawable.stat_notify_chat,
-      speakerLabel,
-      speakerPendingIntent,
-    ).build()
+      // Wire PendingIntents for interactive buttons & body
+      setOnClickPendingIntent(R.id.btn_notification_hangup, hangUpPendingIntent)
+      setOnClickPendingIntent(R.id.btn_notification_speaker, speakerPendingIntent)
+      setOnClickPendingIntent(R.id.notification_root, contentPendingIntent)
+    }
 
     val builder = NotificationCompat.Builder(context, CHANNEL_ID)
       .setSmallIcon(android.R.drawable.ic_menu_call)
-      .setContentTitle(callerTitle)
-      .setContentText(session.formattedDuration)
-      .setSubText("On-going call")
-      .setColor(0xFF007AFF.toInt())
-      .setColorized(true)
+      .setCustomContentView(notificationLayout)
+      .setCustomBigContentView(notificationLayout)
+      .setStyle(NotificationCompat.DecoratedCustomViewStyle())
       .setOngoing(true)
       .setAutoCancel(false)
       .setOnlyAlertOnce(true)
       .setPriority(NotificationCompat.PRIORITY_LOW)
       .setCategory(NotificationCompat.CATEGORY_CALL)
       .setContentIntent(contentPendingIntent)
-      .addAction(hangUpAction)
-      .addAction(speakerAction)
 
     val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
     notificationManager?.notify(NOTIFICATION_ID, builder.build())

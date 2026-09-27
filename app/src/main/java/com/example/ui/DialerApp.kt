@@ -65,8 +65,15 @@ fun DialerApp(
 
   var prefilledAddContactNumber by remember { mutableStateOf<String?>(null) }
 
-  // BackHandler to handle custom state navigation or backstack
-  BackHandler(enabled = activeTab != NavTab.KEYPAD) {
+  val isCallFullScreen = !isCallMinimized && (
+    callSession?.state?.isActive == true ||
+    callSession?.state?.isDialing == true ||
+    callSession?.state?.isHolding == true ||
+    (callSession?.state?.isDisconnected == true && (callSession?.wasAnswered == true || callSession?.isIncomingCall == false))
+  )
+
+  // BackHandler to handle custom state navigation or backstack (only active when no call is full-screen)
+  BackHandler(enabled = activeTab != NavTab.KEYPAD && !isCallFullScreen) {
     viewModel.selectTab(NavTab.KEYPAD)
   }
 

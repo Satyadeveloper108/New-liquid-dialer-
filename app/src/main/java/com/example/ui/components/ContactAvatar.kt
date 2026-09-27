@@ -46,10 +46,12 @@ fun ContactAvatar(
 ) {
   if (!photoUri.isNullOrBlank()) {
     val context = LocalContext.current
-    val imageRequest = remember(photoUri) {
+    val imageRequest = remember(photoUri, context) {
       ImageRequest.Builder(context)
         .data(photoUri)
         .crossfade(false)
+        .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+        .diskCachePolicy(coil.request.CachePolicy.ENABLED)
         .build()
     }
     AsyncImage(
@@ -62,7 +64,7 @@ fun ContactAvatar(
     )
   } else {
     val brush = AvatarGradientBrushes[colorIndex.coerceIn(0, AvatarGradientBrushes.lastIndex)]
-    val fontSize = (size.value * 0.44f).sp
+    val fontSize = remember(size) { (size.value * 0.44f).sp }
 
     Box(
       modifier = modifier

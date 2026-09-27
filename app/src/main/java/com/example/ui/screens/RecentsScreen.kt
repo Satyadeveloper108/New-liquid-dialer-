@@ -260,7 +260,7 @@ private fun RecentCallRow(
   modifier: Modifier = Modifier,
 ) {
   val isMissed = remember(item.callType) { item.callType == CallType.MISSED }
-  val titleColor = if (isMissed) IosRed else colors.textPrimary
+  val titleColor = remember(isMissed, colors.textPrimary) { if (isMissed) IosRed else colors.textPrimary }
   val arrowIcon = remember(item.callType) {
     when (item.callType) {
       CallType.OUTGOING -> Icons.AutoMirrored.Filled.CallMade
@@ -277,12 +277,14 @@ private fun RecentCallRow(
   val colorIndex = remember(item.id) {
     (item.id.hashCode().coerceAtLeast(0) % 5)
   }
+  val handleRowClick = remember(item, onCallRecordClick) { { onCallRecordClick(item) } }
+  val handleDeleteClick = remember(item.id, onDeleteRecord) { { onDeleteRecord(item.id) } }
 
   Column(modifier = modifier.fillMaxWidth()) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .clickable { onCallRecordClick(item) }
+        .clickable(onClick = handleRowClick)
         .padding(horizontal = 16.dp, vertical = 10.dp)
         .testTag("recent_item_${item.id}"),
       verticalAlignment = Alignment.CenterVertically,
@@ -294,7 +296,7 @@ private fun RecentCallRow(
         exit = fadeOut(),
       ) {
         IconButton(
-          onClick = { onDeleteRecord(item.id) },
+          onClick = handleDeleteClick,
           modifier = Modifier
             .padding(end = 8.dp)
             .size(28.dp),
