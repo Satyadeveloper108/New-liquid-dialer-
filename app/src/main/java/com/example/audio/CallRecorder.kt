@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.MediaRecorder
 import android.os.Build
 import android.telecom.Call
+import android.telecom.InCallService
 import android.util.Log
 import com.example.data.db.CallRecording
 import java.io.File
@@ -33,7 +34,7 @@ class CallRecorder(private val defaultContext: Context) {
   fun startRecording(
     phoneNumber: String,
     callerName: String,
-    inCallService: Context? = null,
+    inCallService: InCallService? = null,
     telecomCall: Call? = null,
   ): Boolean {
     if (isRecording) {
@@ -51,9 +52,10 @@ class CallRecorder(private val defaultContext: Context) {
     // Log AudioManager mode and call audio route before starting
     val audioManager = contextToUse.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
     val audioMode = audioManager?.mode ?: -1
-    val callAudioRoute = telecomCall?.details?.callAudioState?.route ?: 0
+    val audioState = inCallService?.callAudioState
+    val callAudioRoute = audioState?.route ?: 0
 
-    Log.d(TAG, "Audio status before start: AudioManager.mode=$audioMode, callAudioState.route=$callAudioRoute")
+    Log.d("CallRecorder", "AudioManager mode=$audioMode route=$callAudioRoute")
 
     // Add 500ms delay or check if route == 0 then wait for hardware audio route to settle
     if (callAudioRoute == 0) {

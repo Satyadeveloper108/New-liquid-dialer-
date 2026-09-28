@@ -98,8 +98,8 @@ object TelecomCallManager {
   }
 
   fun getCurrentAudioRoute(): Int {
-    return currentCallAudioState?.route
-      ?: getActiveTelecomCall()?.details?.callAudioState?.route
+    return inCallService?.callAudioState?.route
+      ?: currentCallAudioState?.route
       ?: 0
   }
 
