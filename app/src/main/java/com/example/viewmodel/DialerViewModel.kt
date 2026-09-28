@@ -22,10 +22,19 @@ import com.example.model.CallType
 import com.example.model.Contact
 import com.example.model.NavTab
 import com.example.model.RecentsFilter
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import com.example.audio.AudioPlaybackManager
+import com.example.audio.CallRecorder
+import com.example.data.db.AppDatabase
+import com.example.data.db.CallRecording
+import com.example.data.db.RecordingRepository
 import com.example.model.VoicemailItem
 import com.example.notification.OngoingCallNotificationManager
 import com.example.telecom.TelecomCallManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +42,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -43,6 +54,36 @@ import kotlinx.coroutines.withContext
 class DialerViewModel(application: Application) : AndroidViewModel(application) {
 
   private val repository = ContactsRepository()
+  private val recordingRepository = RecordingRepository(AppDatabase.getDatabase(application).callRecordingDao())
+  private val callRecorder = CallRecorder(application)
+  val audioPlaybackManager = AudioPlaybackManager(viewModelScope)
+
+  private val _isRecordingActive = MutableStateFlow(false)
+  val isRecordingActive: StateFlow<Boolean> = _isRecordingActive.asStateFlow()
+
+  private val _hasRecordAudioPermission = MutableStateFlow(
+    ContextCompat.checkSelfPermission(application, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED,
+  )
+  val hasRecordAudioPermission: StateFlow<Boolean> = _hasRecordAudioPermission.asStateFlow()
+
+  private val _selectedCallRecordForDetails = MutableStateFlow<CallRecord?>(null)
+  val selectedCallRecordForDetails: StateFlow<CallRecord?> = _selectedCallRecordForDetails.asStateFlow()
+
+  val playingRecordingId: StateFlow<Long?> = audioPlaybackManager.playingRecordingId
+  val isPlaybackPlaying: StateFlow<Boolean> = audioPlaybackManager.isPlaying
+  val playbackPositionMs: StateFlow<Long> = audioPlaybackManager.currentPositionMs
+  val playbackTotalDurationMs: StateFlow<Long> = audioPlaybackManager.totalDurationMs
+
+  @OptIn(ExperimentalCoroutinesApi::class)
+  val selectedRecordRecordings: StateFlow<List<CallRecording>> = _selectedCallRecordForDetails
+    .flatMapLatest { record ->
+      if (record == null) {
+        flowOf(emptyList())
+      } else {
+        recordingRepository.getRecordingsForNumber(record.phoneNumber)
+      }
+    }
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
   private val _activeTab = MutableStateFlow(NavTab.KEYPAD)
   val activeTab: StateFlow<NavTab> = _activeTab.asStateFlow()
@@ -152,6 +193,7 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
           _callSession.value = realSession
         } else {
           if (_callSession.value?.isRealCall == true || wasInRealCall) {
+            stopRecordingAndSave()
             _callSession.value = null
             _isCallMinimized.value = false
             wasInRealCall = false
@@ -170,6 +212,9 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
           OngoingCallNotificationManager.showOrUpdateNotification(context, session)
         } else {
           OngoingCallNotificationManager.cancelNotification(context)
+          if (session == null || session.state == CallState.DISCONNECTED || session.state == CallState.ENDED) {
+            stopRecordingAndSave()
+          }
         }
       }
     }
@@ -300,6 +345,10 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
   fun refreshPermissions(context: Context) {
     val hasContacts = repository.hasContactsPermission(context)
     val hasCall = repository.hasCallLogPermission(context)
+    val hasAudio = ContextCompat.checkSelfPermission(
+      context,
+      Manifest.permission.RECORD_AUDIO,
+    ) == PackageManager.PERMISSION_GRANTED
 
     _hasContactsPermission.value = hasContacts
     if (hasContacts) {
@@ -315,6 +364,11 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
       }
       registerCallLogObserver()
     }
+    _hasRecordAudioPermission.value = hasAudio
+  }
+
+  fun onRecordAudioPermissionResult(isGranted: Boolean) {
+    _hasRecordAudioPermission.value = isGranted
   }
 
   fun onStartupPermissionsResult(contactsGranted: Boolean, callLogGranted: Boolean) {
@@ -328,6 +382,12 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
       registerCallLogObserver()
       loadRealCallLogsWithRetry()
     }
+    val context = getApplication<Application>()
+    val hasAudio = ContextCompat.checkSelfPermission(
+      context,
+      Manifest.permission.RECORD_AUDIO,
+    ) == PackageManager.PERMISSION_GRANTED
+    _hasRecordAudioPermission.value = hasAudio
   }
 
   fun onContactsPermissionResult(isGranted: Boolean) {
@@ -625,6 +685,7 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
   }
 
   fun endCall() {
+    stopRecordingAndSave()
     val current = _callSession.value
     TelecomCallManager.endCall()
     if (current != null) {
@@ -650,6 +711,73 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
       _isCallMinimized.value = false
     }
     refreshCallLogsAfterCallEnded()
+  }
+
+  fun toggleCallRecording() {
+    val session = _callSession.value ?: return
+    if (!session.state.isActive && !session.state.isDialing && !session.state.isHolding) {
+      return
+    }
+
+    val context = getApplication<Application>()
+    val hasAudioPerm = ContextCompat.checkSelfPermission(
+      context,
+      Manifest.permission.RECORD_AUDIO,
+    ) == PackageManager.PERMISSION_GRANTED
+    _hasRecordAudioPermission.value = hasAudioPerm
+
+    if (!hasAudioPerm) {
+      Toast.makeText(context, "Microphone permission is required to record calls", Toast.LENGTH_SHORT).show()
+      return
+    }
+
+    if (_isRecordingActive.value) {
+      stopRecordingAndSave()
+    } else {
+      startRecording(session.phoneNumber, session.callerName)
+    }
+  }
+
+  fun startRecording(phoneNumber: String, callerName: String) {
+    val started = callRecorder.startRecording(phoneNumber, callerName)
+    _isRecordingActive.value = started
+  }
+
+  fun stopRecordingAndSave() {
+    if (!_isRecordingActive.value && !callRecorder.isRecordingActive()) return
+    val recording = callRecorder.stopRecording()
+    _isRecordingActive.value = false
+    if (recording != null) {
+      viewModelScope.launch {
+        recordingRepository.insertRecording(recording)
+      }
+    }
+  }
+
+  fun openCallDetails(record: CallRecord) {
+    _selectedCallRecordForDetails.value = record
+  }
+
+  fun closeCallDetails() {
+    audioPlaybackManager.stop()
+    _selectedCallRecordForDetails.value = null
+  }
+
+  fun playRecording(recording: CallRecording) {
+    audioPlaybackManager.play(recording)
+  }
+
+  fun pausePlayback() {
+    audioPlaybackManager.pause()
+  }
+
+  fun deleteRecording(recording: CallRecording) {
+    if (audioPlaybackManager.playingRecordingId.value == recording.id) {
+      audioPlaybackManager.stop()
+    }
+    viewModelScope.launch {
+      recordingRepository.deleteRecording(recording)
+    }
   }
 
   fun minimizeCall() {
@@ -843,6 +971,8 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
 
   override fun onCleared() {
     super.onCleared()
+    stopRecordingAndSave()
+    audioPlaybackManager.stop()
     unregisterCallLogObserver()
     unregisterContactsObserver()
     callLogRefreshJob?.cancel()

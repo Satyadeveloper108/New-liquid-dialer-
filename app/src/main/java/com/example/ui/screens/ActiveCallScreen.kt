@@ -37,6 +37,13 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Pause
+import android.widget.Toast
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -51,12 +58,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -90,6 +100,8 @@ fun ActiveCallScreen(
   onToggleKeypad: () -> Unit,
   onMinimize: () -> Unit,
   modifier: Modifier = Modifier,
+  isRecordingActive: Boolean = false,
+  hasRecordAudioPermission: Boolean = true,
   onRecordCall: () -> Unit = {},
   onAddCall: (String) -> Unit = {},
   onToggleHold: () -> Unit = {},
@@ -100,7 +112,6 @@ fun ActiveCallScreen(
   onRejectWaitingCall: () -> Unit = {},
 ) {
   val colors = LocalIosColors.current
-  var isRecordingActive by remember { mutableStateOf(false) }
   var isHoldActive by remember { mutableStateOf(false) }
   var showAddCallDialog by remember { mutableStateOf(false) }
 
@@ -317,14 +328,21 @@ fun ActiveCallScreen(
           horizontalArrangement = Arrangement.SpaceEvenly,
           verticalAlignment = Alignment.CenterVertically,
         ) {
+          val context = LocalContext.current
           ActiveCallGlassButton(
             icon = Icons.Filled.FiberManualRecord,
-            label = stringResource(id = R.string.call_record),
+            label = if (isRecordingActive) "recording" else stringResource(id = R.string.call_record),
             isActive = isRecordingActive,
+            isSpecialRecord = true,
+            isPulsing = isRecordingActive,
             isDark = colors.isDark,
+            isEnabled = hasRecordAudioPermission,
             onClick = {
-              isRecordingActive = !isRecordingActive
-              onRecordCall()
+              if (!hasRecordAudioPermission) {
+                Toast.makeText(context, "Microphone permission required for call recording", Toast.LENGTH_SHORT).show()
+              } else {
+                onRecordCall()
+              }
             },
             testTag = "call_control_record",
           )
@@ -648,11 +666,36 @@ private fun ActiveCallGlassButton(
   modifier: Modifier = Modifier,
   size: Dp = 82.dp,
   iconSize: Dp = 34.dp,
+  isSpecialRecord: Boolean = false,
+  isPulsing: Boolean = false,
+  isEnabled: Boolean = true,
 ) {
   val view = LocalView.current
   val interactionSource = remember { MutableInteractionSource() }
 
-  val surfaceBrush = if (isDark) {
+  val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+  val pulseScale by if (isPulsing) {
+    infiniteTransition.animateFloat(
+      initialValue = 1.0f,
+      targetValue = 1.08f,
+      animationSpec = infiniteRepeatable(
+        animation = tween(600, easing = FastOutSlowInEasing),
+        repeatMode = RepeatMode.Reverse,
+      ),
+      label = "record_pulse_scale",
+    )
+  } else {
+    remember { mutableStateOf(1.0f) }
+  }
+
+  val surfaceBrush = if (isSpecialRecord && isActive) {
+    Brush.verticalGradient(
+      colors = listOf(
+        Color(0xFFFF3B30),
+        Color(0xFFD70015),
+      ),
+    )
+  } else if (isDark) {
     if (isActive) {
       Brush.verticalGradient(
         colors = listOf(
@@ -686,7 +729,14 @@ private fun ActiveCallGlassButton(
     }
   }
 
-  val borderBrush = if (isDark) {
+  val borderBrush = if (isSpecialRecord && isActive) {
+    Brush.verticalGradient(
+      colors = listOf(
+        Color(0xFFFF6961),
+        Color(0xFFFF3B30),
+      ),
+    )
+  } else if (isDark) {
     if (isActive) {
       Brush.verticalGradient(
         colors = listOf(
@@ -720,13 +770,17 @@ private fun ActiveCallGlassButton(
     }
   }
 
-  val contentColor = if (isDark) {
+  val contentColor = if (isSpecialRecord && isActive) {
+    Color.White
+  } else if (isDark) {
     if (isActive) Color(0xFF15161A) else Color.White
   } else {
     if (isActive) Color.White else Color(0xFF15161A)
   }
 
-  val labelColor = if (isDark) {
+  val labelColor = if (isSpecialRecord && isActive) {
+    Color(0xFFFF3B30)
+  } else if (isDark) {
     if (isActive) Color.White else Color(0xFFE2E4E9)
   } else {
     if (isActive) Color(0xFF111215) else Color(0xFF2D2E34)
@@ -748,6 +802,8 @@ private fun ActiveCallGlassButton(
     Box(
       modifier = Modifier
         .size(size)
+        .scale(pulseScale)
+        .alpha(if (isEnabled) 1.0f else 0.5f)
         .shadow(
           elevation = shadowElevation,
           shape = CircleShape,

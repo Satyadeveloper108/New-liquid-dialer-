@@ -80,6 +80,7 @@ fun RecentsScreen(
   onFilterSelected: (RecentsFilter) -> Unit,
   onCallRecordClick: (CallRecord) -> Unit,
   onDeleteRecord: (String) -> Unit,
+  onOpenCallDetails: (CallRecord) -> Unit = {},
   onPermissionResult: (Boolean) -> Unit = {},
   modifier: Modifier = Modifier,
   listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
@@ -246,6 +247,7 @@ fun RecentsScreen(
             colors = colors,
             onCallRecordClick = onCallRecordClick,
             onDeleteRecord = onDeleteRecord,
+            onOpenCallDetails = onOpenCallDetails,
           )
         }
 
@@ -264,6 +266,7 @@ private fun RecentCallRow(
   colors: IosThemeColors,
   onCallRecordClick: (CallRecord) -> Unit,
   onDeleteRecord: (String) -> Unit,
+  onOpenCallDetails: (CallRecord) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   val isMissed = item.callType == CallType.MISSED
@@ -379,7 +382,7 @@ private fun RecentCallRow(
 
       // Circular Info (i) button in iOS Blue
       IconButton(
-        onClick = { /* Info details */ },
+        onClick = { onOpenCallDetails(item) },
         modifier = Modifier.size(28.dp),
       ) {
         Icon(

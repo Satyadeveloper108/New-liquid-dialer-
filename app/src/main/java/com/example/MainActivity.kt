@@ -48,13 +48,16 @@ class MainActivity : ComponentActivity() {
     requestCallLogPermissionFlow()
   }
 
-  // Step 3: Call Log & Phone Permissions Launcher
+  // Step 3: Call Log, Recording & Phone Permissions Launcher
   private val callLogPermissionLauncher = registerForActivityResult(
     ActivityResultContracts.RequestMultiplePermissions(),
   ) { permissions ->
     val callLogGranted = permissions[Manifest.permission.READ_CALL_LOG]
       ?: dialerViewModel.checkCallLogPermission(this)
     dialerViewModel.onCallLogPermissionResult(callLogGranted)
+    val audioGranted = permissions[Manifest.permission.RECORD_AUDIO]
+      ?: (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+    dialerViewModel.onRecordAudioPermissionResult(audioGranted)
     dialerViewModel.refreshPermissions(this)
   }
 
@@ -177,12 +180,20 @@ class MainActivity : ComponentActivity() {
       false
     }
 
+    val needsRecordAudio = ContextCompat.checkSelfPermission(
+      this,
+      Manifest.permission.RECORD_AUDIO,
+    ) != PackageManager.PERMISSION_GRANTED
+
     val permsToRequest = mutableListOf<String>()
     if (needsCallLog) {
       permsToRequest.add(Manifest.permission.READ_CALL_LOG)
     }
     if (needsCallPhone) {
       permsToRequest.add(Manifest.permission.CALL_PHONE)
+    }
+    if (needsRecordAudio) {
+      permsToRequest.add(Manifest.permission.RECORD_AUDIO)
     }
     if (needsBluetooth && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
       permsToRequest.add(Manifest.permission.BLUETOOTH_CONNECT)

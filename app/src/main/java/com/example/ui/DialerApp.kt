@@ -30,6 +30,7 @@ import com.example.ui.components.AddContactDialog
 import com.example.ui.components.IosBottomNav
 import com.example.ui.components.MiniCallBanner
 import com.example.ui.screens.ActiveCallScreen
+import com.example.ui.screens.CallDetailsScreen
 import com.example.ui.screens.ContactsScreen
 import com.example.ui.screens.FavouritesScreen
 import com.example.ui.screens.IncomingCallScreen
@@ -64,6 +65,16 @@ fun DialerApp(
 
   val hasContactsPermission by viewModel.hasContactsPermission.collectAsStateWithLifecycle()
   val hasCallLogPermission by viewModel.hasCallLogPermission.collectAsStateWithLifecycle()
+  val hasRecordAudioPermission by viewModel.hasRecordAudioPermission.collectAsStateWithLifecycle()
+  val isRecordingActive by viewModel.isRecordingActive.collectAsStateWithLifecycle()
+
+  val selectedCallRecordForDetails by viewModel.selectedCallRecordForDetails.collectAsStateWithLifecycle()
+  val recordingsForSelected by viewModel.selectedRecordRecordings.collectAsStateWithLifecycle()
+  val playingRecordingId by viewModel.playingRecordingId.collectAsStateWithLifecycle()
+  val isPlaybackPlaying by viewModel.isPlaybackPlaying.collectAsStateWithLifecycle()
+  val playbackPositionMs by viewModel.playbackPositionMs.collectAsStateWithLifecycle()
+  val playbackTotalDurationMs by viewModel.playbackTotalDurationMs.collectAsStateWithLifecycle()
+
   val isRealDeviceContacts by viewModel.isRealDeviceContacts.collectAsStateWithLifecycle()
   val isLoadingContacts by viewModel.isLoadingContacts.collectAsStateWithLifecycle()
 
@@ -81,9 +92,13 @@ fun DialerApp(
     (callSession?.state?.isDisconnected == true && (callSession?.wasAnswered == true || callSession?.isIncomingCall == false))
   )
 
-  // BackHandler to handle custom state navigation or backstack (only active when no call is full-screen)
-  BackHandler(enabled = activeTab != NavTab.KEYPAD && !isCallFullScreen) {
-    viewModel.selectTab(NavTab.KEYPAD)
+  // BackHandler to handle custom state navigation or backstack (handles CallDetails and tab switching)
+  BackHandler(enabled = (selectedCallRecordForDetails != null || activeTab != NavTab.KEYPAD) && !isCallFullScreen) {
+    if (selectedCallRecordForDetails != null) {
+      viewModel.closeCallDetails()
+    } else {
+      viewModel.selectTab(NavTab.KEYPAD)
+    }
   }
 
   Box(
@@ -162,6 +177,9 @@ fun DialerApp(
                 },
                 onDeleteRecord = { id ->
                   viewModel.removeRecent(id)
+                },
+                onOpenCallDetails = { record ->
+                  viewModel.openCallDetails(record)
                 },
                 onPermissionResult = { isGranted ->
                   viewModel.onCallLogPermissionResult(isGranted)
@@ -276,6 +294,9 @@ fun DialerApp(
           onToggleSpeaker = { viewModel.toggleSpeaker() },
           onToggleKeypad = { viewModel.toggleKeypad() },
           onMinimize = { viewModel.minimizeCall() },
+          isRecordingActive = isRecordingActive,
+          hasRecordAudioPermission = hasRecordAudioPermission,
+          onRecordCall = { viewModel.toggleCallRecording() },
           onToggleHold = { viewModel.toggleHold() },
           onDtmfTone = { char -> viewModel.sendDtmfTone(char) },
           onAddCall = { number -> viewModel.addSecondCall(number) },
@@ -283,6 +304,38 @@ fun DialerApp(
           onMergeCalls = { viewModel.mergeCalls() },
           onAcceptWaitingCall = { holdCurrent -> viewModel.acceptWaitingCall(holdCurrent) },
           onRejectWaitingCall = { viewModel.rejectWaitingCall() },
+        )
+      }
+    }
+
+    // Call Details Screen Full-Screen Overlay (Info icon from Recents)
+    AnimatedVisibility(
+      visible = selectedCallRecordForDetails != null && !isCallFullScreen,
+      enter = slideInHorizontally(
+        initialOffsetX = { fullWidth -> fullWidth },
+        animationSpec = tween(240, easing = FastOutSlowInEasing),
+      ) + fadeIn(),
+      exit = slideOutHorizontally(
+        targetOffsetX = { fullWidth -> fullWidth },
+        animationSpec = tween(200, easing = FastOutSlowInEasing),
+      ) + fadeOut(),
+    ) {
+      selectedCallRecordForDetails?.let { record ->
+        CallDetailsScreen(
+          callRecord = record,
+          recordings = recordingsForSelected,
+          playingRecordingId = playingRecordingId,
+          isPlaybackPlaying = isPlaybackPlaying,
+          playbackPositionMs = playbackPositionMs,
+          playbackTotalDurationMs = playbackTotalDurationMs,
+          onBack = { viewModel.closeCallDetails() },
+          onCall = { number ->
+            viewModel.closeCallDetails()
+            viewModel.startOutgoingCall(record.contactName, number)
+          },
+          onPlayRecording = { recording -> viewModel.playRecording(recording) },
+          onPauseRecording = { viewModel.pausePlayback() },
+          onDeleteRecording = { recording -> viewModel.deleteRecording(recording) },
         )
       }
     }
