@@ -87,6 +87,25 @@ object TelecomCallManager {
     appContext = service.applicationContext
   }
 
+  fun getInCallService(): InCallService? = inCallService
+
+  fun getActiveTelecomCall(): Call? = activeCall
+
+  fun startCallRecording(
+    phoneNumber: String,
+    callerName: String,
+    recorder: com.example.audio.CallRecorder,
+  ): Boolean {
+    val serviceContext = inCallService ?: appContext
+    val call = activeCall
+    return recorder.startRecording(
+      phoneNumber = phoneNumber,
+      callerName = callerName,
+      serviceContext = serviceContext,
+      telecomCall = call,
+    )
+  }
+
   fun unregisterInCallService(service: InCallService) {
     if (inCallService == service) {
       inCallService = null

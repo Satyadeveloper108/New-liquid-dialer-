@@ -13,6 +13,11 @@ import com.example.notification.OngoingCallNotificationManager
 
 class AppInCallService : InCallService() {
 
+  override fun onCreate() {
+    super.onCreate()
+    TelecomCallManager.registerInCallService(this)
+  }
+
   override fun onConfigurationChanged(newConfig: Configuration) {
     super.onConfigurationChanged(newConfig)
     OngoingCallNotificationManager.onConfigurationChanged(this)

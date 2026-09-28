@@ -715,11 +715,14 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
 
   fun toggleCallRecording() {
     val session = _callSession.value ?: return
-    if (!session.state.isActive && !session.state.isDialing && !session.state.isHolding) {
+    val context = getApplication<Application>()
+
+    // Ensure call is fully connected and active before capturing audio
+    if (session.state != CallState.ACTIVE) {
+      Toast.makeText(context, "Wait for call to connect", Toast.LENGTH_SHORT).show()
       return
     }
 
-    val context = getApplication<Application>()
     val hasAudioPerm = ContextCompat.checkSelfPermission(
       context,
       Manifest.permission.RECORD_AUDIO,
@@ -739,8 +742,12 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
   }
 
   fun startRecording(phoneNumber: String, callerName: String) {
-    val started = callRecorder.startRecording(phoneNumber, callerName)
+    val started = TelecomCallManager.startCallRecording(phoneNumber, callerName, callRecorder)
     _isRecordingActive.value = started
+    if (!started) {
+      val context = getApplication<Application>()
+      Toast.makeText(context, "Unable to start recording", Toast.LENGTH_SHORT).show()
+    }
   }
 
   fun stopRecordingAndSave() {
