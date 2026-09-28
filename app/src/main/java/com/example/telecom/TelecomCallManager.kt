@@ -89,19 +89,31 @@ object TelecomCallManager {
 
   fun getInCallService(): InCallService? = inCallService
 
-  fun getActiveTelecomCall(): Call? = activeCall
+  fun getActiveTelecomCall(): Call? {
+    val call = activeCall
+    if (call != null && call.state == Call.STATE_ACTIVE) {
+      return call
+    }
+    return callList.firstOrNull { it.state == Call.STATE_ACTIVE }
+  }
+
+  fun getCurrentAudioRoute(): Int {
+    return currentCallAudioState?.route
+      ?: getActiveTelecomCall()?.details?.callAudioState?.route
+      ?: 0
+  }
 
   fun startCallRecording(
     phoneNumber: String,
     callerName: String,
     recorder: com.example.audio.CallRecorder,
   ): Boolean {
-    val serviceContext = inCallService ?: appContext
-    val call = activeCall
+    val service = inCallService
+    val call = getActiveTelecomCall()
     return recorder.startRecording(
       phoneNumber = phoneNumber,
       callerName = callerName,
-      serviceContext = serviceContext,
+      inCallService = service,
       telecomCall = call,
     )
   }
@@ -1086,5 +1098,24 @@ object TelecomCallManager {
       e.printStackTrace()
       false
     }
+  }
+}
+
+/**
+ * Android 14+ (API 34+) framework call recording extension.
+ * Calls framework API if supported by platform/ROM; safely falls back if absent.
+ */
+fun Call.startCallRecording(): Boolean {
+  return try {
+    val method = this.javaClass.methods.firstOrNull { it.name == "startCallRecording" }
+    if (method != null) {
+      method.invoke(this)
+      true
+    } else {
+      false
+    }
+  } catch (e: Exception) {
+    android.util.Log.w("TelecomCallManager", "Call.startCallRecording failed", e)
+    false
   }
 }

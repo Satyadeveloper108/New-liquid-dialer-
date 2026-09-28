@@ -33,7 +33,7 @@ class CallRecorder(private val defaultContext: Context) {
   fun startRecording(
     phoneNumber: String,
     callerName: String,
-    serviceContext: Context? = null,
+    inCallService: Context? = null,
     telecomCall: Call? = null,
   ): Boolean {
     if (isRecording) {
@@ -46,10 +46,29 @@ class CallRecorder(private val defaultContext: Context) {
       return false
     }
 
-    val effectiveContext = serviceContext ?: defaultContext
+    val contextToUse = inCallService ?: defaultContext
+
+    // Log AudioManager mode and call audio route before starting
+    val audioManager = contextToUse.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+    val audioMode = audioManager?.mode ?: -1
+    val callAudioRoute = telecomCall?.details?.callAudioState?.route ?: 0
+
+    Log.d(TAG, "Audio status before start: AudioManager.mode=$audioMode, callAudioState.route=$callAudioRoute")
+
+    // Add 500ms delay or check if route == 0 then wait for hardware audio route to settle
+    if (callAudioRoute == 0) {
+      try {
+        Log.d(TAG, "callAudioState.route == 0, waiting 500ms for audio routing...")
+        Thread.sleep(500)
+      } catch (ignored: InterruptedException) {}
+    } else {
+      try {
+        Thread.sleep(500)
+      } catch (ignored: InterruptedException) {}
+    }
 
     try {
-      val recordingsDir = File(effectiveContext.filesDir, "call_recordings").apply {
+      val recordingsDir = File(contextToUse.filesDir, "call_recordings").apply {
         if (!exists()) mkdirs()
       }
 
@@ -70,8 +89,9 @@ class CallRecorder(private val defaultContext: Context) {
       for ((source, sourceName) in candidateSources) {
         var testRecorder: MediaRecorder? = null
         try {
+          Log.d(TAG, "Attempting MediaRecorder with source $sourceName using inCallService context...")
           testRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            MediaRecorder(effectiveContext)
+            MediaRecorder(contextToUse)
           } else {
             @Suppress("DEPRECATION")
             MediaRecorder()
@@ -91,11 +111,11 @@ class CallRecorder(private val defaultContext: Context) {
           activeSourceName = sourceName
           Log.d(
             TAG,
-            "startRecording state=${telecomCall?.state ?: "ACTIVE"} source=$sourceName file=${outputFile.absolutePath}"
+            "startRecording succeeded: state=${telecomCall?.state ?: "ACTIVE"} source=$sourceName file=${outputFile.absolutePath}"
           )
           break
         } catch (e: Exception) {
-          Log.w(TAG, "AudioSource $sourceName failed on prepare/start, trying fallback", e)
+          Log.w(TAG, "AudioSource $sourceName failed on prepare/start: ${e.message}, trying next fallback", e)
           try {
             testRecorder?.reset()
             testRecorder?.release()

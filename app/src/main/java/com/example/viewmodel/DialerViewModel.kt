@@ -25,6 +25,8 @@ import com.example.model.RecentsFilter
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
+import android.os.Build
+import android.util.Log
 import com.example.audio.AudioPlaybackManager
 import com.example.audio.CallRecorder
 import com.example.data.db.AppDatabase
@@ -33,6 +35,7 @@ import com.example.data.db.RecordingRepository
 import com.example.model.VoicemailItem
 import com.example.notification.OngoingCallNotificationManager
 import com.example.telecom.TelecomCallManager
+import com.example.telecom.startCallRecording
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -736,9 +739,28 @@ class DialerViewModel(application: Application) : AndroidViewModel(application) 
 
     if (_isRecordingActive.value) {
       stopRecordingAndSave()
-    } else {
-      startRecording(session.phoneNumber, session.callerName)
+      return
     }
+
+    // Check CallAudioState route before starting
+    val activeCall = TelecomCallManager.getActiveTelecomCall()
+    val audioRoute = TelecomCallManager.getCurrentAudioRoute()
+    Log.d("DialerViewModel", "toggleCallRecording: CallAudioState.route=$audioRoute, SDK=${Build.VERSION.SDK_INT}")
+
+    // Dual path: on Android 14+ (API 34+), attempt framework Call.startCallRecording()
+    if (Build.VERSION.SDK_INT >= 34 && activeCall != null) {
+      val frameworkStarted = activeCall.startCallRecording()
+      if (frameworkStarted) {
+        _isRecordingActive.value = true
+        Log.i("DialerViewModel", "Framework Call.startCallRecording() started successfully")
+        return
+      } else {
+        Log.d("DialerViewModel", "Framework Call.startCallRecording() not supported or failed, using MediaRecorder fallback")
+      }
+    }
+
+    // MediaRecorder fallback using InCallService foreground service context
+    startRecording(session.phoneNumber, session.callerName)
   }
 
   fun startRecording(phoneNumber: String, callerName: String) {
