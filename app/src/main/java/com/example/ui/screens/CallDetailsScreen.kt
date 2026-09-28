@@ -4,8 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,9 +34,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -52,8 +50,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -65,9 +63,11 @@ import com.example.ui.components.ContactAvatar
 import com.example.ui.components.GlassSurface
 import com.example.ui.theme.IosBlue
 import com.example.ui.theme.IosRed
+import com.example.ui.theme.IosThemeColors
 import com.example.ui.theme.LocalIosColors
 import java.util.Locale
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CallDetailsScreen(
   callRecord: CallRecord,
@@ -82,6 +82,7 @@ fun CallDetailsScreen(
   onPauseRecording: () -> Unit,
   onDeleteRecording: (CallRecording) -> Unit,
   modifier: Modifier = Modifier,
+  isDark: Boolean = LocalIosColors.current.isDark,
 ) {
   val colors = LocalIosColors.current
   val context = LocalContext.current
@@ -179,7 +180,7 @@ fun CallDetailsScreen(
 
           Spacer(modifier = Modifier.height(18.dp))
 
-          // Quick Action Buttons (Call, Message, Share)
+          // Quick Action Buttons (Call, Message)
           Row(
             modifier = Modifier
               .fillMaxWidth()
@@ -191,6 +192,7 @@ fun CallDetailsScreen(
               label = "call",
               onClick = { onCall(callRecord.phoneNumber) },
               colors = colors,
+              isDark = isDark,
             )
 
             DetailActionButton(
@@ -207,6 +209,7 @@ fun CallDetailsScreen(
                 }
               },
               colors = colors,
+              isDark = isDark,
             )
           }
         }
@@ -218,11 +221,10 @@ fun CallDetailsScreen(
           GlassSurface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            isDark = colors.isDark,
           ) {
             Column(modifier = Modifier.padding(16.dp)) {
               Text(
-                text = callRecord.formattedDate.ifBlank { "Call Record" },
+                text = callRecord.dateFormatted.ifBlank { "Call Record" },
                 color = colors.textPrimary,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -261,16 +263,6 @@ fun CallDetailsScreen(
                   fontSize = 14.sp,
                 )
               }
-
-              if (callRecord.durationFormatted.isNotBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                  text = "Duration: ${callRecord.durationFormatted}",
-                  color = colors.textSecondary,
-                  fontSize = 13.sp,
-                  modifier = Modifier.padding(start = 24.dp),
-                )
-              }
             }
           }
         }
@@ -303,7 +295,6 @@ fun CallDetailsScreen(
             GlassSurface(
               modifier = Modifier.fillMaxWidth(),
               shape = RoundedCornerShape(16.dp),
-              isDark = colors.isDark,
             ) {
               Column(
                 modifier = Modifier
@@ -339,7 +330,6 @@ fun CallDetailsScreen(
                 .fillMaxWidth()
                 .padding(vertical = 4.dp),
               shape = RoundedCornerShape(14.dp),
-              isDark = colors.isDark,
             ) {
               Column(
                 modifier = Modifier
@@ -365,7 +355,7 @@ fun CallDetailsScreen(
                   // In-App Play / Pause Button
                   Surface(
                     shape = CircleShape,
-                    color = if (isThisPlaying) IosBlue else (if (colors.isDark) Color(0x33FFFFFF) else Color(0x1F000000)),
+                    color = if (isThisPlaying) IosBlue else (if (isDark) Color(0x33FFFFFF) else Color(0x1F000000)),
                     modifier = Modifier
                       .size(42.dp)
                       .clip(CircleShape),
@@ -392,7 +382,7 @@ fun CallDetailsScreen(
                   // Recording Title (Date/Time) & Subtitle (Duration)
                   Column(modifier = Modifier.weight(1f)) {
                     Text(
-                      text = recording.formattedDateTime,
+                      text = recording.formattedDate,
                       color = colors.textPrimary,
                       fontSize = 15.sp,
                       fontWeight = FontWeight.SemiBold,
@@ -401,7 +391,7 @@ fun CallDetailsScreen(
                     Spacer(modifier = Modifier.height(2.dp))
 
                     Text(
-                      text = "Duration: ${recording.formattedDuration}",
+                      text = "Duration: ${recording.durationFormatted}",
                       color = colors.textSecondary,
                       fontSize = 13.sp,
                     )
@@ -443,7 +433,7 @@ fun CallDetailsScreen(
                         .height(4.dp)
                         .clip(RoundedCornerShape(2.dp)),
                       color = IosBlue,
-                      trackColor = if (colors.isDark) Color(0x33FFFFFF) else Color(0x1F000000),
+                      trackColor = if (isDark) Color(0x33FFFFFF) else Color(0x1F000000),
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -458,7 +448,7 @@ fun CallDetailsScreen(
                         fontSize = 11.sp,
                       )
                       Text(
-                        text = recording.formattedDuration,
+                        text = recording.durationFormatted,
                         color = colors.textSecondary,
                         fontSize = 11.sp,
                       )
@@ -504,10 +494,11 @@ fun CallDetailsScreen(
 
 @Composable
 private fun DetailActionButton(
-  icon: androidx.compose.ui.graphics.vector.ImageVector,
+  icon: ImageVector,
   label: String,
   onClick: () -> Unit,
-  colors: com.example.ui.theme.IosThemeColors,
+  colors: IosThemeColors = LocalIosColors.current,
+  isDark: Boolean = colors.isDark,
 ) {
   Column(
     horizontalAlignment = Alignment.CenterHorizontally,
@@ -515,7 +506,7 @@ private fun DetailActionButton(
   ) {
     Surface(
       shape = CircleShape,
-      color = if (colors.isDark) Color(0x33FFFFFF) else Color(0x14000000),
+      color = if (isDark) Color(0x33FFFFFF) else Color(0x14000000),
       modifier = Modifier
         .size(48.dp)
         .clip(CircleShape),

@@ -15,17 +15,15 @@ data class CallRecording(
   val timestamp: Long = System.currentTimeMillis(),
   val durationMs: Long = 0L,
 ) {
+  val formattedDate: String
+    get() = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date(timestamp))
+
+  val durationFormatted: String
+    get() = String.format(Locale.getDefault(), "%d:%02d", durationMs / 60000, (durationMs % 60000) / 1000)
+
   val formattedDateTime: String
-    get() {
-      val sdf = SimpleDateFormat("dd MMM yyyy, h:mm a", Locale.getDefault())
-      return sdf.format(Date(timestamp))
-    }
+    get() = formattedDate
 
   val formattedDuration: String
-    get() {
-      val totalSecs = (durationMs / 1000).coerceAtLeast(0)
-      val mins = totalSecs / 60
-      val secs = totalSecs % 60
-      return String.format(Locale.getDefault(), "%02d:%02d", mins, secs)
-    }
+    get() = durationFormatted
 }
